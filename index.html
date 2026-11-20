@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tannscribe: transcribe and translate any video</title>
+<meta name="description" content="Drop a video, get a transcript with timestamps, and read it in any of 98 languages. Whisper runs in your browser, so your audio and video never leave your device. Free, no account.">
+<meta name="keywords" content="transcribe video, free transcription, whisper, subtitles, SRT, VTT, translate subtitles, speech to text, browser transcription">
+<meta property="og:title" content="Tannscribe: transcribe and translate any video">
+<meta property="og:description" content="Free in-browser transcription and translation. Your audio and video never leave your device.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="poster.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Tannscribe: transcribe and translate any video">
+<meta name="twitter:description" content="Free in-browser transcription and translation. Your audio and video never leave your device.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@100,400;100,500;125,300&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="page.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="container bar__in">
+    <a class="mark" href="./">Tannscribe</a>
+
+    <div class="bar__action">
+      <button class="btn btn--ghost" type="button" id="pick">Choose a video</button>
+      <input class="visually-hidden" type="file" id="file" accept="video/*,audio/*" tabindex="-1" aria-hidden="true">
+    </div>
+  </div>
+</header>
+
+<main class="container shell">
+
+  <div class="rail">
+    <div class="stage">
+      <div class="frame">
+        <video id="player" src="demo.mp4" poster="poster.jpg" controls playsinline preload="metadata"></video>
+      </div>
+      <p class="frame__cap">CARRYMINATI PLAYS GTA VI, 2:50:31 into the stream</p>
+    </div>
+
+    <!-- ad-slot-sidebar: 300x250. Paste your AdSense or Adsterra unit inside this aside. -->
+    <aside class="ad" id="ad-slot-sidebar" aria-label="Advertisement">
+      <p class="ad__note">Ad space, 300 by 250</p>
+    </aside>
+  </div>
+
+  <div class="desk">
+    <div class="desk__head">
+      <h1 id="clipName">01_carry-pulls-up-to-jack-of-hearts.mp4</h1>
+      <div class="meta" id="clipMeta">
+        <span id="metaLength">55.2 s</span>
+        <span id="metaSize">1080 by 1920</span>
+        <span id="metaLines">8 lines</span>
+      </div>
+    </div>
+
+    <div class="engine">
+      <div class="field">
+        <label class="engine__label" for="spoken">Spoken</label>
+        <select id="spoken"></select>
+      </div>
+      <div class="field">
+        <label class="engine__label" for="task">Task</label>
+        <select id="task">
+          <option value="transcribe" selected>Transcribe (keep spoken language)</option>
+          <option value="translate">Translate to English</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="engine__label" for="model">Model</label>
+        <select id="model">
+          <option value="tiny" selected>Whisper tiny, quickest</option>
+          <option value="base">Whisper base, more accurate</option>
+        </select>
+      </div>
+      <button class="btn btn--primary" type="button" id="run">Transcribe</button>
+      <p class="engine__note" id="engineNote">Set Spoken to the language you hear. Nothing is uploaded.</p>
+    </div>
+
+    <div class="progress" id="progress" hidden>
+      <div class="progress__track"><span class="progress__fill" id="progressFill"></span></div>
+      <p class="progress__label" id="progressLabel">Reading the file</p>
+    </div>
+
+    <button class="wave" type="button" id="wave" aria-label="Seek through the clip"></button>
+
+    <div class="toolbar">
+      <button class="btn btn--ghost" type="button" id="toggle" aria-pressed="true">Hide translation</button>
+      <button class="btn btn--ghost" type="button" id="copy">Copy</button>
+      <button class="btn btn--ghost" type="button" id="videoDl" aria-label="Download the video">Video</button>
+      <button class="btn btn--ghost" type="button" id="txt" aria-label="Download as plain text">TXT</button>
+      <button class="btn btn--ghost" type="button" id="srt" aria-label="Download as SRT subtitles">SRT</button>
+      <button class="btn btn--ghost" type="button" id="vtt" aria-label="Download as WebVTT subtitles">VTT</button>
+      <p class="toolbar__note" id="note" hidden></p>
+    </div>
+
+    <table class="lines" id="lines">
+      <caption class="visually-hidden">Transcript with timestamps</caption>
+      <thead>
+        <tr>
+          <th scope="col">Time</th>
+          <th scope="col">Transcript</th>
+          <th scope="col" id="langHead">Hindi</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr data-t="0.0"><td><button class="tc" type="button" data-seek="0">0:00.0</button></td><td>Look at the girl’s face.</td><td class="tr-line">लड़की का चेहरा देखो।</td></tr>
+        <tr data-t="14.4"><td><button class="tc" type="button" data-seek="14.4">0:14.4</button></td><td>How many likes are there?</td><td class="tr-line">कितने लाइक्स आ गए हैं?</td></tr>
+        <tr data-t="18.0"><td><button class="tc" type="button" data-seek="18">0:18.0</button></td><td>Let’s go, bro.</td><td class="tr-line">चलो शुरू करें, भाई।</td></tr>
+        <tr data-t="21.1"><td><button class="tc" type="button" data-seek="21.1">0:21.1</button></td><td>I don’t have money.</td><td class="tr-line">मेरे पास पैसे नहीं हैं।</td></tr>
+        <tr data-t="24.0"><td><button class="tc" type="button" data-seek="24">0:24.0</button></td><td>140?</td><td class="tr-line">एक सौ चालीस?</td></tr>
+        <tr data-t="25.9"><td><button class="tc" type="button" data-seek="25.9">0:25.9</button></td><td>Bye, 145 K.</td><td class="tr-line">बाय, एक सौ पैंतालीस हज़ार।</td></tr>
+        <tr data-t="38.6"><td><button class="tc" type="button" data-seek="38.6">0:38.6</button></td><td>I’m looking for him.</td><td class="tr-line">मैं उसे ढूँढ रहा हूँ।</td></tr>
+        <tr data-t="43.9"><td><button class="tc" type="button" data-seek="43.9">0:43.9</button></td><td>I need to spot him, right?</td><td class="tr-line">मुझे उसे पहचानना है, है ना?</td></tr>
+      </tbody>
+    </table>
+
+    <details class="byok" id="byok" hidden>
+      <summary>Translate subtitles to any language (bring your own Gemini key)</summary>
+      <div class="byok__body">
+        <p class="byok__intro">Whisper only translates to English for free. For any other language, paste your own free Google Gemini API key and Tannscribe will translate the SRT in your browser. The key stays in this browser (localStorage) and is never sent to our servers.</p>
+        <div class="field">
+          <label class="engine__label" for="byokKey">Gemini API key</label>
+          <input type="password" id="byokKey" placeholder="AIza..." autocomplete="off">
+        </div>
+        <div class="field">
+          <label class="engine__label" for="byokLang">Translate to</label>
+          <select id="byokLang"></select>
+        </div>
+        <div class="byok__row">
+          <button class="btn btn--primary" type="button" id="byokRun">Translate SRT</button>
+          <button class="btn btn--ghost" type="button" id="byokDl">Download translated .srt</button>
+          <button class="btn btn--ghost" type="button" id="byokClear">Clear key</button>
+        </div>
+        <p class="byok__status" id="byokStatus"></p>
+        <textarea id="byokOut" rows="8" placeholder="Translated subtitles appear here."></textarea>
+      </div>
+    </details>
+    <div class="empty" id="empty" hidden>
+      <h2 id="emptyTitle">No transcript for this file yet</h2>
+      <p id="emptyText">Press Transcribe and Whisper will listen to this file in the tab.</p>
+    </div>
+
+    <div class="empty empty--error" id="failed" hidden>
+      <h2>That file could not be read</h2>
+      <p>Try an MP4, MOV, WebM, M4A, MP3, WAV or OGG file. Browsers cannot open every container format, and this page decodes the audio before it sends anything to the model.</p>
+    </div>
+  </div>
+
+</main>
+
+<section class="content">
+  <div class="container">
+    <h2>How it works</h2>
+    <ol class="steps">
+      <li><strong>Drop a file.</strong> MP4, MOV, WebM, M4A, MP3, WAV or OGG. Up to your browser's limits.</li>
+      <li><strong>Choose the spoken language and the task.</strong> Transcribe keeps the original language. Translate to English uses Whisper's built-in speech-to-English mode.</li>
+      <li><strong>Press Transcribe.</strong> Whisper runs in this tab. The waveform, transcript and timestamps appear as it listens.</li>
+      <li><strong>Export.</strong> Copy, or download as TXT, SRT or VTT. Use the Video button to save the source file.</li>
+    </ol>
+
+    <h2>Private by design</h2>
+    <p>Everything runs on your device. Your audio and video are decoded in the browser and transcribed by a model that downloads once and then runs offline. Nothing is uploaded, no account is needed, and no one else can read your files. That makes Tannscribe a good fit for journalists, students, researchers and creators working with sensitive material.</p>
+
+    <h2>Supported formats and exports</h2>
+    <ul class="bullets">
+      <li><strong>Input:</strong> MP3, MP4, WAV, M4A, MOV, WebM, OGG and most browser-readable containers.</li>
+      <li><strong>Transcript:</strong> plain text with timestamps, one line per segment.</li>
+      <li><strong>Subtitles:</strong> SRT and WebVTT, ready for YouTube, Premiere, CapCut, ffmpeg and most players.</li>
+      <li><strong>Languages:</strong> 98, read from the Whisper model list. Transcription works in all of them; English translation runs offline.</li>
+    </ul>
+
+    <h2>Frequently asked questions</h2>
+    <div class="faq">
+      <details>
+        <summary>Is my video uploaded anywhere?</summary>
+        <p>No. The model runs in your browser tab. Your file never leaves your device.</p>
+      </details>
+      <details>
+        <summary>Does it cost anything?</summary>
+        <p>No. Whisper is open source and runs locally. Optional translation to other languages uses your own free Google Gemini API key, which you paste into the panel. We never see it.</p>
+      </details>
+      <details>
+        <summary>Why is the first run slow?</summary>
+        <p>The first run downloads the model (about 94 MB) and caches it. After that, transcription runs offline. On a modest CPU, expect roughly one hour of processing per hour of audio.</p>
+      </details>
+      <details>
+        <summary>Can I translate into languages other than English?</summary>
+        <p>Whisper translates into English only. For other languages, use the collapsible panel below the transcript with your own Gemini key. The SRT timestamps are preserved.</p>
+      </details>
+      <details>
+        <summary>What about very long files?</summary>
+        <p>Long files work but take time. Keep the tab open and the device awake until it finishes.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <div class="container">
+    <!-- ad-slot-bottom: 970x90. Paste your leaderboard unit inside this aside. -->
+    <aside class="ad ad--band" id="ad-slot-bottom" aria-label="Advertisement">
+      <p class="ad__note">Ad space, 970 by 90</p>
+    </aside>
+
+    <div class="foot__in">
+      <p><strong>98 languages</strong>, read from the Whisper model list. Files stay on this machine and nothing is uploaded.</p>
+      <p>Transcription and English translation run in your browser through Whisper. Other languages need a translation model.</p>
+      <button class="btn btn--ghost" type="button" id="supportOpen">Support this project</button>
+    </div>
+  </div>
+</footer>
+
+<dialog class="sheet" id="support" aria-labelledby="supportTitle">
+  <h2 id="supportTitle">Support Tannscribe</h2>
+  <p>The model runs on your own machine, so there is no bill to pay and no upload to watch. If it saves you time, you can put something back.</p>
+  <p class="sheet__fine">Payment link not connected in this build. Replace the href on this link with your Buy Me a Coffee or Lemon Squeezy URL.</p>
+  <div class="sheet__row">
+    <a class="btn btn--primary" id="supportLink" href="#" rel="noopener">Buy me a coffee</a>
+    <form method="dialog"><button class="btn btn--ghost" type="submit">Close</button></form>
+  </div>
+</dialog>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

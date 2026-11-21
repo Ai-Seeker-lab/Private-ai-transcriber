@@ -51,6 +51,7 @@
     <div class="stage">
       <div class="frame">
         <video id="player" src="demo.mp4" poster="poster.jpg" controls playsinline preload="metadata"></video>
+      <div class="subtitle-overlay" id="subtitleOverlay" aria-live="polite" aria-atomic="true"></div>
       </div>
       <p class="frame__cap">CARRYMINATI PLAYS GTA VI, 2:50:31 into the stream</p>
     </div>
@@ -88,6 +89,18 @@
           <option value="translate">Translate to English</option>
         </select>
       </div>
+      <div class="field">
+        <label class="engine__label" for="speed">Speed</label>
+        <select id="speed">
+          <option value="0.5">0.5x</option>
+          <option value="0.75">0.75x</option>
+          <option value="1" selected>1x</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+          <option value="2">2x</option>
+        </select>
+      </div>
+
       <div class="field">
         <label class="engine__label" for="model">Model</label>
         <select id="model">
@@ -141,6 +154,18 @@
         <tr data-t="43.9"><td><button class="tc" type="button" data-seek="43.9">0:43.9</button></td><td>I need to spot him, right?</td><td class="tr-line">मुझे उसे पहचानना है, है ना?</td></tr>
       </tbody>
     </table>
+
+    <details class="style-panel" id="stylePanel">
+      <summary>Subtitle style (preview only)</summary>
+      <div class="style-panel__body">
+        <div class="field"><label class="engine__label" for="styleSize">Size</label><input type="range" id="styleSize" min="12" max="48" value="22"></div>
+        <div class="field"><label class="engine__label" for="styleColor">Text</label><input type="color" id="styleColor" value="#ffffff"></div>
+        <div class="field"><label class="engine__label" for="styleBg">Background</label><input type="color" id="styleBg" value="#000000"></div>
+        <div class="field"><label class="engine__label" for="styleBgOpacity">Bg opacity</label><input type="range" id="styleBgOpacity" min="0" max="100" value="60"></div>
+        <div class="field"><label class="engine__label" for="styleAlign">Align</label><select id="styleAlign"><option value="center" selected>Center</option><option value="left">Left</option><option value="right">Right</option></select></div>
+        <div class="field"><label class="engine__label" for="stylePos">Position</label><select id="stylePos"><option value="bottom" selected>Bottom</option><option value="top">Top</option><option value="middle">Middle</option></select></div>
+      </div>
+    </details>
 
     <details class="byok" id="byok" hidden>
       <summary>Translate subtitles to any language (bring your own Gemini key)</summary>

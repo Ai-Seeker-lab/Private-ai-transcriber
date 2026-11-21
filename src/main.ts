@@ -30,6 +30,7 @@ interface ElMap {
   spoken: HTMLSelectElement;
   task: HTMLSelectElement;
   model: HTMLSelectElement;
+  speed: HTMLSelectElement;
   run: HTMLButtonElement;
   engineNote: HTMLParagraphElement;
   cacheStatus: HTMLParagraphElement;
@@ -58,6 +59,14 @@ interface ElMap {
   byokStatus: HTMLParagraphElement;
   byokClear: HTMLButtonElement;
   byokPersist: HTMLInputElement;
+  stylePanel: HTMLDetailsElement;
+  styleSize: HTMLInputElement;
+  styleColor: HTMLInputElement;
+  styleBg: HTMLInputElement;
+  styleBgOpacity: HTMLInputElement;
+  styleAlign: HTMLSelectElement;
+  stylePos: HTMLSelectElement;
+  subtitleOverlay: HTMLDivElement;
 }
 
 const el = {
@@ -81,6 +90,7 @@ const el = {
   spoken: $('#spoken'),
   task: $('#task'),
   model: $('#model'),
+  speed: $('#speed'),
   run: $('#run'),
   engineNote: $('#engineNote'),
   cacheStatus: $('#cacheStatus'),
@@ -109,6 +119,14 @@ const el = {
   byokStatus: $('#byokStatus'),
   byokClear: $('#byokClear'),
   byokPersist: $('#byokPersist'),
+  stylePanel: $('#stylePanel'),
+  styleSize: $('#styleSize'),
+  styleColor: $('#styleColor'),
+  styleBg: $('#styleBg'),
+  styleBgOpacity: $('#styleBgOpacity'),
+  styleAlign: $('#styleAlign'),
+  stylePos: $('#stylePos'),
+  subtitleOverlay: $('#subtitleOverlay'),
 } as ElMap;
 
 const BARS = 160;
@@ -227,6 +245,21 @@ function applyLanguage(code: string): void {
   }
 }
 
+function renderWaveSegments(): void {
+  el.wave.querySelectorAll('.wave__seg').forEach((node) => node.remove());
+  const duration = el.player.duration || state.duration;
+  if (!duration || !state.segments.length) return;
+  for (const seg of state.segments) {
+    const div = document.createElement('div');
+    div.className = 'wave__seg';
+    div.style.left = (seg.start / duration * 100) + '%';
+    div.style.width = Math.max(0.5, (seg.end - seg.start) / duration * 100) + '%';
+    div.title = seg.text;
+    div.addEventListener('click', (event) => { event.stopPropagation(); seekTo(seg.start); });
+    el.wave.appendChild(div);
+  }
+}
+
 function drawBars(values: number[]): void {
   const fragment = document.createDocumentFragment();
   const bars: HTMLSpanElement[] = [];
@@ -241,6 +274,19 @@ function drawBars(values: number[]): void {
   (el.wave as HTMLButtonElement & { bars: HTMLSpanElement[] }).bars = bars;
 }
 
+function updateSubtitleOverlay(time: number): void {
+  const seg = state.segments.find((s, i) => {
+    const next = state.segments[i + 1];
+    return time >= s.start && (next ? time < next.start : time <= s.end);
+  }) || state.segments.find((s) => time >= s.start && time <= s.end);
+  if (seg && seg.text) {
+    el.subtitleOverlay.textContent = seg.text;
+    el.subtitleOverlay.hidden = false;
+  } else {
+    el.subtitleOverlay.textContent = '';
+    el.subtitleOverlay.hidden = true;
+  }
+}
 function paintPlayhead(): void {
   const duration = el.player.duration || state.duration;
   const ratio = duration ? Math.min(1, el.player.currentTime / duration) : 0;
@@ -250,6 +296,7 @@ function paintPlayhead(): void {
     bars[i].classList.toggle('is-played', i < upTo);
   }
   paintLiveRow(el.player.currentTime);
+  updateSubtitleOverlay(el.player.currentTime);
 }
 
 function paintLiveRow(time: number): void {
@@ -257,7 +304,13 @@ function paintLiveRow(time: number): void {
   for (let i = 0; i < rows.length; i++) {
     if (Number(rows[i].dataset.t) <= time) live = i;
   }
-  rows.forEach((row, index) => row.classList.toggle('is-live', index === live));
+  rows.forEach((row, index) => {
+    const isActive = index === live;
+    row.classList.toggle('is-live', isActive);
+    if (isActive && row.scrollIntoView) {
+      try { row.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch { /* ignore */ }
+    }
+  });
 }
 
 function seekTo(seconds: number): void {
@@ -282,6 +335,94 @@ function peaksFromPcm(pcm: Float32Array, count: number): number[] {
   return peaks;
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16) || 0;
+  const g = parseInt(h.slice(2, 4), 16) || 0;
+  const b = parseInt(h.slice(4, 6), 16) || 0;
+  return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+}
+function parseTimeInput(text: string): number | null {
+  const t = text.trim();
+  if (!t) return null;
+  if (t.includes(':')) {
+    const parts = t.split(':');
+    let seconds = 0;
+    for (const part of parts) {
+      const n = parseFloat(part);
+      if (isNaN(n)) return null;
+      seconds = seconds * 60 + n;
+    }
+    return seconds >= 0 ? seconds : null;
+  }
+  const n = parseFloat(t);
+  return isNaN(n) || n < 0 ? null : n;
+}
+
+function attachTimeEditor(button: HTMLButtonElement, row: HTMLTableRowElement): void {
+  button.addEventListener('dblclick', (event) => {
+    event.stopPropagation();
+    event.preventDefault();
+    const id = Number(row.dataset.id);
+    const seg = state.segments.find((s) => s.id === id);
+    if (!seg || state.busy) return;
+
+    const cell = button.parentElement as HTMLTableCellElement;
+    const startInput = document.createElement('input');
+    startInput.type = 'text';
+    startInput.value = seg.start.toFixed(1);
+    startInput.className = 'time-input';
+    startInput.setAttribute('aria-label', 'Start time in seconds');
+    const endInput = document.createElement('input');
+    endInput.type = 'text';
+    endInput.value = seg.end.toFixed(1);
+    endInput.className = 'time-input';
+    endInput.setAttribute('aria-label', 'End time in seconds');
+
+    const apply = () => {
+      const newStart = parseTimeInput(startInput.value);
+      const newEnd = parseTimeInput(endInput.value);
+      if (newStart === null || newEnd === null || newEnd <= newStart) {
+        cell.replaceChildren(button);
+        return;
+      }
+      const idx = state.segments.findIndex((s) => s.id === id);
+      const prev = idx > 0 ? state.segments[idx - 1] : null;
+      const next = idx < state.segments.length - 1 ? state.segments[idx + 1] : null;
+      if (prev && newStart < prev.end) { cell.replaceChildren(button); return; }
+      if (next && newEnd > next.start) { cell.replaceChildren(button); return; }
+      seg.start = newStart;
+      seg.end = newEnd;
+      row.dataset.t = String(newStart);
+      button.dataset.seek = String(newStart);
+      button.textContent = clock(newStart);
+      cell.replaceChildren(button);
+      scheduleHistoryPush();
+    };
+
+    const wrap = document.createElement('span');
+    wrap.className = 'time-edit';
+    wrap.append(startInput, document.createTextNode(' – '), endInput);
+    cell.replaceChildren(wrap);
+    startInput.focus();
+    startInput.select();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') { e.preventDefault(); apply(); }
+      if (e.key === 'Escape') { e.preventDefault(); cell.replaceChildren(button); }
+    };
+    startInput.addEventListener('keydown', onKey);
+    endInput.addEventListener('keydown', onKey);
+    cell.addEventListener('focusout', (e) => {
+      const related = e.relatedTarget as Node | null;
+      if (related && cell.contains(related)) return;
+      // defer to allow the other input to receive focus
+      setTimeout(() => {
+        if (!cell.contains(document.activeElement)) apply();
+      }, 0);
+    }, { once: true });
+  });
+}
 function attachEditHandlers(cell: HTMLTableCellElement, row: HTMLTableRowElement): void {
   cell.contentEditable = 'true';
   cell.spellcheck = true;
@@ -308,6 +449,7 @@ function rowFor(segment: Segment): HTMLTableRowElement {
   button.dataset.seek = String(segment.start);
   button.textContent = clock(segment.start);
   cellTime.appendChild(button);
+  attachTimeEditor(button, row);
 
   const cellText = document.createElement('td');
   cellText.textContent = segment.text;
@@ -340,6 +482,7 @@ function addSegment(segment: Segment): void {
   rows = Array.from(el.tbody.querySelectorAll('tr'));
   updateMeta();
   paintPlayhead();
+  renderWaveSegments();
 }
 
 function updateMeta(): void {
@@ -727,6 +870,7 @@ async function loadFile(file: File): Promise<void> {
     state.pcm = pcm;
     drawBars(peaksFromPcm(pcm, BARS));
     paintPlayhead();
+    renderWaveSegments();
   } catch {
     el.wave.hidden = true;
   }
@@ -836,6 +980,8 @@ function wire(): void {
     rows[i].dataset.id = String(i);
     const cell = rows[i].children[1] as HTMLTableCellElement | null;
     if (cell) attachEditHandlers(cell, rows[i]);
+    const timeBtn = rows[i].querySelector('.tc') as HTMLButtonElement | null;
+    if (timeBtn) attachTimeEditor(timeBtn, rows[i]);
   }
 
   pushHistoryNow();
@@ -847,6 +993,7 @@ function wire(): void {
   drawBars(DEMO.bars);
   applyLanguage('hi');
   paintPlayhead();
+  renderWaveSegments();
 
   if (location.protocol === 'file:') {
     el.run.disabled = true;
@@ -973,6 +1120,29 @@ function wire(): void {
   el.search.addEventListener('input', () => filterTranscript(el.search.value));
 
   el.spoken.addEventListener('change', () => applyLanguage(el.spoken.value === 'en' ? 'en' : el.spoken.value));
+
+  el.speed.addEventListener('change', () => {
+    const rate = parseFloat(el.speed.value) || 1;
+    el.player.playbackRate = rate;
+  });
+
+  // subtitle styling controls
+  const applyStyle = () => {
+    const overlay = el.subtitleOverlay;
+    overlay.style.fontSize = el.styleSize.value + 'px';
+    overlay.style.color = el.styleColor.value;
+    const bg = el.styleBg.value;
+    const opacity = (parseInt(el.styleBgOpacity.value, 10) || 0) / 100;
+    overlay.style.backgroundColor = hexToRgba(bg, opacity);
+    overlay.style.textAlign = el.styleAlign.value;
+    overlay.classList.remove('pos-top', 'pos-middle', 'pos-bottom');
+    overlay.classList.add('pos-' + el.stylePos.value);
+  };
+  for (const id of ['styleSize', 'styleColor', 'styleBg', 'styleBgOpacity', 'styleAlign', 'stylePos']) {
+    el[id as keyof ElMap].addEventListener('input', applyStyle);
+    el[id as keyof ElMap].addEventListener('change', applyStyle);
+  }
+  applyStyle();
 
   document.addEventListener('keydown', (event) => {
     const mod = event.ctrlKey || event.metaKey;

@@ -56,8 +56,15 @@ const QUIET = 0.012;
 interface Loaded { key: string; pipe: any; device: string; }
 let loaded: Loaded = { key: '', pipe: null, device: '' };
 let cancelled = false;
+let currentSession: string | null = null;
 
-const post = (message: unknown): void => self.postMessage(message);
+const post = (message: unknown): void => {
+  const payload = (message && typeof message === 'object' && !Array.isArray(message))
+    ? Object.assign({}, message as object, { sessionId: currentSession })
+    : message;
+  self.postMessage(payload);
+};
+
 
 function devicePlan(): { device: string; dtype: string }[] {
   const gpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
@@ -111,6 +118,10 @@ async function getPipeline(model: string): Promise<any> {
       post({ type: 'ready', model: key, device: option.device, cached: false });
       return pipe;
     } catch (error) {
+      const msg = (error as Error)?.message || String(error);
+      if (/quota|storage/i.test(msg)) {
+        throw new Error('Storage quota exceeded. Clear the cached model and retry.');
+      }
       lastError = error;
       post({ type: 'status', text: option.device + ' did not start, trying the next backend' });
     }
@@ -124,9 +135,17 @@ function isQuiet(slice: Float32Array): boolean {
   return Math.sqrt(sum / Math.max(1, Math.ceil(slice.length / 64))) < QUIET;
 }
 
-async function transcribe({ audio, model, task, language }: { audio: Float32Array; model: string; task?: string; language?: string }): Promise<void> {
+async function transcribe({ audio, model, task, language, sessionId }: { audio: Float32Array; model: string; task?: string; language?: string; sessionId?: string | null }): Promise<void> {
   cancelled = false;
-  const pipe = await getPipeline(model);
+  let pipe: any;
+  try {
+    pipe = await getPipeline(model);
+  } catch (error) {
+    post({ type: 'error', sessionId, text: (error as Error)?.message || 'The model could not be loaded.' });
+    return;
+  }
+  if (cancelled) { post({ type: 'cancelled' }); return; }
+
   const duration = audio.length / SAMPLE_RATE;
 
   post({ type: 'status', text: 'Listening' });
@@ -159,6 +178,8 @@ async function transcribe({ audio, model, task, language }: { audio: Float32Arra
         post({ type: 'status', text: 'That window failed: ' + ((error as Error)?.message || 'unknown') });
       }
 
+      if (cancelled) { post({ type: 'cancelled' }); return; }
+
       const chunks = result && Array.isArray(result.chunks) && result.chunks.length
         ? result.chunks
         : result && result.text
@@ -190,9 +211,11 @@ async function transcribe({ audio, model, task, language }: { audio: Float32Arra
 // Registered synchronously, before anything asynchronous runs, so a run
 // request that arrives early is handled instead of dropped.
 self.addEventListener('message', (event: MessageEvent) => {
-  const data = (event.data || {}) as { type?: string; audio?: Float32Array; model?: string; task?: string; language?: string };
+  const data = (event.data || {}) as { type?: string; audio?: Float32Array; model?: string; task?: string; language?: string; sessionId?: string };
 
   if (data.type === 'run') {
+    currentSession = (typeof data.sessionId === 'string') ? data.sessionId : null;
+    cancelled = false;
     transcribe({ audio: data.audio as Float32Array, model: data.model || 'tiny', task: data.task, language: data.language }).catch((error) => {
       post({ type: 'error', text: (error as Error)?.message || String(error) });
     });
@@ -201,7 +224,7 @@ self.addEventListener('message', (event: MessageEvent) => {
 
   if (data.type === 'cancel') {
     cancelled = true;
-    post({ type: 'status', text: 'Stopping after this window' });
+    post({ type: 'status', text: 'Cancelling…' });
   }
 });
 

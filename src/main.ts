@@ -1,5 +1,6 @@
 import { DEMO } from './data';
 import type { DemoLang, Segment, Task } from './types';
+import { pad, clock, stamp, size, sanitizeFilename } from './format';
 import '../tokens.css';
 import '../base.css';
 import '../page.css';
@@ -31,6 +32,8 @@ interface ElMap {
   model: HTMLSelectElement;
   run: HTMLButtonElement;
   engineNote: HTMLParagraphElement;
+  cacheStatus: HTMLParagraphElement;
+  clearCache: HTMLButtonElement;
   progress: HTMLDivElement;
   fill: HTMLSpanElement;
   progressLabel: HTMLParagraphElement;
@@ -80,6 +83,8 @@ const el = {
   model: $('#model'),
   run: $('#run'),
   engineNote: $('#engineNote'),
+  cacheStatus: $('#cacheStatus'),
+  clearCache: $('#clearCache'),
   progress: $('#progress'),
   fill: $('#progressFill'),
   progressLabel: $('#progressLabel'),
@@ -126,6 +131,7 @@ interface State {
   startedAt: number | null;
   elapsedTimer: number | null;
   progressBase: string;
+  sessionId: string | null;
 }
 
 const state: State = {
@@ -142,36 +148,11 @@ const state: State = {
   startedAt: null,
   elapsedTimer: null,
   progressBase: '',
+  sessionId: null,
 };
 
 let rows: HTMLTableRowElement[] = [];
 let worker: Worker | null = null;
-
-function pad(value: number, width = 2): string {
-  return String(value).padStart(width, '0');
-}
-
-function clock(seconds: number): string {
-  const value = Math.max(0, Number(seconds) || 0);
-  const minutes = Math.floor(value / 60);
-  const rest = value - minutes * 60;
-  return `${minutes}:${rest < 10 ? '0' : ''}${rest.toFixed(1)}`;
-}
-
-function stamp(seconds: number, comma: boolean): string {
-  const total = Math.max(0, Math.round((Number(seconds) || 0) * 1000));
-  const hours = Math.floor(total / 3600000);
-  const minutes = Math.floor((total % 3600000) / 60000);
-  const secs = Math.floor((total % 60000) / 1000);
-  const ms = total % 1000;
-  return `${pad(hours)}:${pad(minutes)}:${pad(secs)}${comma ? ',' : '.'}${pad(ms, 3)}`;
-}
-
-function size(bytes: number): string {
-  if (!bytes) return '0 KB';
-  const mb = bytes / (1024 * 1024);
-  return mb < 1 ? Math.round(bytes / 1024) + ' KB' : mb.toFixed(0) + ' MB';
-}
 
 function nameOf(code: string): string {
   const hit = DEMO.languages.find((language) => language.code === code);
@@ -507,6 +488,8 @@ function ensureWorker(): Worker {
 
 function onWorkerMessage(event: MessageEvent): void {
   const message = (event.data || {}) as Record<string, unknown>;
+  const incomingSession = typeof message.sessionId === 'string' ? message.sessionId : null;
+  if (incomingSession && state.sessionId && incomingSession !== state.sessionId) return;
   switch (message.type) {
     case 'status':
       if (typeof message.text === 'string') setProgressBase(message.text);
@@ -554,6 +537,7 @@ async function runEngine(): Promise<void> {
   state.runTask = task;
   state.showingDemo = false;
   state.segments = [];
+  state.sessionId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
   clearRows();
 
   el.table.hidden = false;
@@ -578,7 +562,7 @@ async function runEngine(): Promise<void> {
     setProgressBase('Extracting audio');
     setFill(0.06);
     ensureWorker().postMessage(
-      { type: 'run', audio: pcm, model: el.model.value, task, language: el.spoken.value || 'en' },
+      { type: 'run', audio: pcm, model: el.model.value, task, language: el.spoken.value || 'en', sessionId: state.sessionId },
       [pcm.buffer]
     );
   } catch (error) {
@@ -587,14 +571,16 @@ async function runEngine(): Promise<void> {
 }
 
 function stopRun(): void {
-  if (worker) worker.postMessage({ type: 'cancel' });
-  el.run.textContent = 'Stopping';
+  if (worker) worker.postMessage({ type: 'cancel', sessionId: state.sessionId });
+  el.run.disabled = true;
+  el.run.textContent = 'Cancelling…';
 }
 
 function finishRun(stopped: boolean): void {
   if (state.elapsedTimer) { window.clearInterval(state.elapsedTimer); state.elapsedTimer = null; }
   state.startedAt = null;
   state.busy = false;
+  el.run.disabled = false;
   el.run.textContent = state.segments.length ? 'Transcribe again' : 'Transcribe';
   el.progress.hidden = true;
   setFill(0);
@@ -620,12 +606,14 @@ function finishRun(stopped: boolean): void {
   }
   // show the BYOK panel once we have a transcript
   if (state.segments.length) el.byok.hidden = false;
+  refreshCacheStatus();
 }
 
 function failRun(error: Error): void {
   if (state.elapsedTimer) { window.clearInterval(state.elapsedTimer); state.elapsedTimer = null; }
   state.startedAt = null;
   state.busy = false;
+  el.run.disabled = false;
   el.run.textContent = 'Transcribe';
   el.progress.hidden = true;
   setFill(0);
@@ -718,7 +706,8 @@ async function loadFile(file: File): Promise<void> {
   updateMeta();
 
   el.progress.hidden = false;
-  el.progressLabel.textContent = 'Reading the file';
+  const isVideo = !!el.player.videoWidth;
+  el.progressLabel.textContent = isVideo ? 'Extracting audio from video' : 'Reading audio';
   setFill(0.04);
 
   try {
@@ -732,6 +721,56 @@ async function loadFile(file: File): Promise<void> {
 
   el.progress.hidden = true;
   await runEngine();
+}
+
+// ---------- model cache (Cache API, transformers.js default) ----------
+async function inspectModelCache(): Promise<{ cached: boolean; bytes: number; entries: number }> {
+  try {
+    if (!('caches' in window)) return { cached: false, bytes: 0, entries: 0 };
+    const names = await caches.keys();
+    let target: Cache | null = null;
+    for (const name of names) {
+      const c = await caches.open(name);
+      const keys = await c.keys();
+      if (keys.some((k) => /whisper|\.onnx|transformers/i.test(k.url))) { target = c; break; }
+    }
+    if (!target) {
+      try { target = await caches.open('transformers-cache'); } catch { /* ignore */ }
+    }
+    if (!target) return { cached: false, bytes: 0, entries: 0 };
+    const keys = await target.keys();
+    let bytes = 0;
+    for (const req of keys) {
+      try {
+        const res = await target.match(req);
+        if (res) bytes += (await res.clone().arrayBuffer()).byteLength;
+      } catch { /* ignore */ }
+    }
+    const relevant = keys.filter((k) => /whisper|\.onnx/i.test(k.url));
+    return { cached: relevant.length > 0, bytes, entries: relevant.length || keys.length };
+  } catch {
+    return { cached: false, bytes: 0, entries: 0 };
+  }
+}
+
+async function clearModelCache(): Promise<void> {
+  try {
+    const names = await caches.keys();
+    for (const name of names) {
+      if (/transformers|whisper/i.test(name)) await caches.delete(name);
+    }
+    await caches.delete('transformers-cache');
+  } catch { /* ignore */ }
+}
+
+async function refreshCacheStatus(): Promise<void> {
+  const info = await inspectModelCache();
+  if (info.cached) {
+    const mb = info.bytes ? (info.bytes / (1024 * 1024)).toFixed(0) + ' MB' : 'unknown size';
+    el.cacheStatus.textContent = 'Model cache: ready (' + info.entries + ' files, ' + mb + '). Repeat runs skip the download.';
+  } else {
+    el.cacheStatus.textContent = 'Model cache: empty. The first transcription downloads the model (~40-140 MB).';
+  }
 }
 
 function wire(): void {
@@ -757,6 +796,16 @@ function wire(): void {
     el.run.disabled = true;
     el.engineNote.textContent = 'Open this page over http. Double click serve.cmd in this folder, then use the address it opens.';
   }
+
+  // Low-end device hint
+  try {
+    const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+    const cores = navigator.hardwareConcurrency || 0;
+    if ((memory && memory <= 4) || (cores && cores <= 2)) {
+      el.model.value = 'tiny';
+      el.engineNote.textContent = 'Low-memory device detected. Using Whisper tiny for stability. You can switch to base manually.';
+    }
+  } catch { /* ignore */ }
 
   window.addEventListener('beforeunload', (event) => {
     if (state.segments.length > 0) {
@@ -986,6 +1035,15 @@ function wire(): void {
     download(baseName() + '.' + el.byokLang.value + '.srt', el.byokOut.value, 'application/x-subrip');
   });
 
+  el.clearCache.addEventListener('click', async () => {
+    el.clearCache.disabled = true;
+    el.cacheStatus.textContent = 'Clearing cache…';
+    await clearModelCache();
+    await refreshCacheStatus();
+    el.clearCache.disabled = false;
+  });
+
+  refreshCacheStatus();
   scheduleNativeAd();
 }
 

@@ -1062,6 +1062,7 @@ function wire(): void {
     el.onboardingTip.hidden = true;
     try { localStorage.setItem('tannscribe.onboardingDismissed', '1'); } catch { /* ignore */ }
   });
+  if (location.protocol === 'file:') {
     el.run.disabled = true;
     el.engineNote.textContent = 'Open this page over http. Double click serve.cmd in this folder, then use the address it opens.';
   }

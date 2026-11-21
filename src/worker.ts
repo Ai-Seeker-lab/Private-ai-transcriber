@@ -2,13 +2,46 @@
 
 // transformers.js is loaded at runtime from the CDN so it is never bundled
 // into the app and the initial download stays small.
-const { pipeline, env } = await import(
-  // @ts-ignore
-  /* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/dist/transformers.min.js'
-);
+//
+// The load is lazy and started from inside the message handler on purpose.
+// A top-level await here would leave the worker without a message listener
+// while the module resolves, and any run request posted during that window
+// would be dispatched to an empty scope and lost.
+const LIB_URLS = [
+  'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/dist/transformers.min.js',
+  'https://unpkg.com/@huggingface/transformers@4.3.2/dist/transformers.min.js',
+];
 
-env.allowLocalModels = false;
-env.useBrowserCache = true;
+interface TransformersLib {
+  pipeline: (task: string, model: string, options: Record<string, unknown>) => Promise<any>;
+  env: { allowLocalModels: boolean; useBrowserCache: boolean };
+}
+
+let libPromise: Promise<TransformersLib> | null = null;
+
+async function importLib(): Promise<TransformersLib> {
+  let lastError: unknown = null;
+  for (const url of LIB_URLS) {
+    try {
+      const module = await import(/* @vite-ignore */ url);
+      const lib = module as unknown as TransformersLib;
+      lib.env.allowLocalModels = false;
+      lib.env.useBrowserCache = true;
+      return lib;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw (lastError instanceof Error ? lastError : new Error('The speech engine could not be downloaded.'));
+}
+
+function loadLib(): Promise<TransformersLib> {
+  if (!libPromise) {
+    libPromise = importLib();
+    libPromise.catch(() => { libPromise = null; });
+  }
+  return libPromise;
+}
 
 const MODELS: Record<string, string> = {
   tiny: 'Xenova/whisper-tiny',
@@ -61,6 +94,9 @@ async function getPipeline(model: string): Promise<any> {
     post({ type: 'ready', model: key, device: loaded.device, cached: true });
     return loaded.pipe;
   }
+
+  post({ type: 'status', text: 'Loading the speech engine' });
+  const { pipeline } = await loadLib();
 
   let lastError: unknown = null;
   for (const option of devicePlan()) {
@@ -151,6 +187,8 @@ async function transcribe({ audio, model, task, language }: { audio: Float32Arra
   post({ type: 'done', duration, segments: index });
 }
 
+// Registered synchronously, before anything asynchronous runs, so a run
+// request that arrives early is handled instead of dropped.
 self.addEventListener('message', (event: MessageEvent) => {
   const data = (event.data || {}) as { type?: string; audio?: Float32Array; model?: string; task?: string; language?: string };
 

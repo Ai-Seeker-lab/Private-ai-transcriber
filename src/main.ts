@@ -543,9 +543,14 @@ function finishRun(stopped: boolean): void {
   }
 
   el.note.hidden = false;
-  el.note.textContent = state.runTask === 'translate'
-    ? 'English, translated by Whisper during the run.'
-    : 'Whisper transcribed the spoken language. English is the only translation that runs offline, so ' + nameOf(el.spoken.value) + ' needs a translation model.';
+  const spoken = el.spoken.value;
+  if (state.runTask === 'translate') {
+    el.note.textContent = 'English, translated by Whisper during the run.';
+  } else if (spoken === 'en') {
+    el.note.textContent = 'Whisper transcribed the spoken language, which is English.';
+  } else {
+    el.note.textContent = 'Whisper transcribed ' + nameOf(spoken) + '. Set Task to Translate to English for an English version.';
+  }
   // show the BYOK panel once we have a transcript
   if (state.segments.length) el.byok.hidden = false;
 }

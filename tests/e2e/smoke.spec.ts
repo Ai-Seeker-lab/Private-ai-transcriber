@@ -75,3 +75,23 @@ test('VTT export starts with WEBVTT', async ({ page }) => {
   for await (const chunk of stream) data += chunk.toString();
   expect(data.startsWith('WEBVTT')).toBe(true);
 });
+
+test('timestamp is editable via double click', async ({ page }) => {
+  await page.goto('/');
+  const btn = page.locator('#lines tbody .tc').first();
+  await btn.dblclick();
+  await expect(page.locator('.time-input').first()).toBeVisible();
+  await page.keyboard.press('Escape');
+});
+
+test('speed select changes playback rate', async ({ page }) => {
+  await page.goto('/');
+  await page.selectOption('#speed', '2');
+  const rate = await page.evaluate(() => document.getElementById('player').playbackRate);
+  expect(rate).toBe(2);
+});
+
+test('subtitle overlay exists', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#subtitleOverlay')).toBeAttached();
+});

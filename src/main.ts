@@ -134,8 +134,6 @@ const el = {
   onboardingBack: $('#onboardingBack'),
   onboardingNext: $('#onboardingNext'),
   onboardingRestart: $('#onboardingRestart'),
-  onboardingTip: $('#onboardingTip'),
-  onboardingDismiss: $('#onboardingDismiss'),
   byok: $('#byok'),
   byokKey: $('#byokKey'),
   byokLang: $('#byokLang'),

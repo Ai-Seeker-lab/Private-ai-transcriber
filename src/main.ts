@@ -245,6 +245,58 @@ function applyLanguage(code: string): void {
   }
 }
 
+let dragState: { seg: Segment; div: HTMLDivElement; duration: number; startX: number; origStart: number; origEnd: number; moved: boolean } | null = null;
+
+function beginSegmentDrag(event: PointerEvent, seg: Segment, div: HTMLDivElement, duration: number): void {
+  if (state.busy) return;
+  event.preventDefault();
+  event.stopPropagation();
+  try { div.setPointerCapture(event.pointerId); } catch { /* ignore */ }
+  dragState = { seg, div, duration, startX: event.clientX, origStart: seg.start, origEnd: seg.end, moved: false };
+  const onMove = (e: PointerEvent) => {
+    if (!dragState) return;
+    const rect = el.wave.getBoundingClientRect();
+    const deltaSec = ((e.clientX - dragState.startX) / rect.width) * dragState.duration;
+    if (Math.abs(e.clientX - dragState.startX) > 3) dragState.moved = true;
+    const len = dragState.origEnd - dragState.origStart;
+    let newStart = dragState.origStart + deltaSec;
+    let newEnd = dragState.origEnd + deltaSec;
+    if (newStart < 0) { newStart = 0; newEnd = len; }
+    if (newEnd > dragState.duration) { newEnd = dragState.duration; newStart = newEnd - len; }
+    const idx = state.segments.findIndex((s) => s.id === dragState!.seg.id);
+    const prev = idx > 0 ? state.segments[idx - 1] : null;
+    const next = idx < state.segments.length - 1 ? state.segments[idx + 1] : null;
+    if (prev && newStart < prev.end) { newStart = prev.end; newEnd = newStart + len; }
+    if (next && newEnd > next.start) { newEnd = next.start; newStart = newEnd - len; }
+    if (newStart < 0 || newEnd > dragState.duration || newEnd <= newStart) return;
+    dragState.seg.start = newStart;
+    dragState.seg.end = newEnd;
+    dragState.div.style.left = (newStart / dragState.duration * 100) + '%';
+    dragState.div.style.width = Math.max(0.5, (newEnd - newStart) / dragState.duration * 100) + '%';
+  };
+  const onUp = () => {
+    if (dragState && dragState.moved) {
+      const row = rows.find((r) => Number(r.dataset.id) === dragState!.seg.id);
+      if (row) {
+        row.dataset.t = String(dragState!.seg.start);
+        const btn = row.querySelector('.tc') as HTMLButtonElement | null;
+        if (btn) { btn.dataset.seek = String(dragState!.seg.start); btn.textContent = clock(dragState!.seg.start); }
+      }
+      scheduleHistoryPush();
+      renderWaveSegments();
+    } else if (dragState) {
+      seekTo(dragState.seg.start);
+    }
+    dragState = null;
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    document.removeEventListener('pointercancel', onUp);
+  };
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', onUp);
+  document.addEventListener('pointercancel', onUp);
+}
+
 function renderWaveSegments(): void {
   el.wave.querySelectorAll('.wave__seg').forEach((node) => node.remove());
   const duration = el.player.duration || state.duration;
@@ -255,7 +307,8 @@ function renderWaveSegments(): void {
     div.style.left = (seg.start / duration * 100) + '%';
     div.style.width = Math.max(0.5, (seg.end - seg.start) / duration * 100) + '%';
     div.title = seg.text;
-    div.addEventListener('click', (event) => { event.stopPropagation(); seekTo(seg.start); });
+    div.dataset.id = String(seg.id ?? '');
+    div.addEventListener('pointerdown', (event) => beginSegmentDrag(event, seg, div, duration));
     el.wave.appendChild(div);
   }
 }

@@ -153,6 +153,9 @@ const state: State = {
 
 let rows: HTMLTableRowElement[] = [];
 let worker: Worker | null = null;
+let transcriptHistory: string[][] = [];
+let historyIndex = -1;
+let historyTimer: number | null = null;
 
 function nameOf(code: string): string {
   const hit = DEMO.languages.find((language) => language.code === code);
@@ -287,6 +290,7 @@ function attachEditHandlers(cell: HTMLTableCellElement, row: HTMLTableRowElement
     const id = Number(row.dataset.id);
     const seg = state.segments.find((s) => s.id === id);
     if (seg) seg.text = cell.textContent?.trim() ?? '';
+    scheduleHistoryPush();
   };
   cell.addEventListener('input', sync);
   cell.addEventListener('blur', sync);
@@ -308,6 +312,7 @@ function rowFor(segment: Segment): HTMLTableRowElement {
   const cellText = document.createElement('td');
   cellText.textContent = segment.text;
   attachEditHandlers(cellText, row);
+  if (state.busy) cellText.contentEditable = 'false';
 
   const cellTranslation = document.createElement('td');
   cellTranslation.className = 'tr-line';
@@ -605,7 +610,14 @@ function finishRun(stopped: boolean): void {
     el.note.textContent = 'Whisper transcribed ' + nameOf(spoken) + '. Set Task to Translate to English for an English version.';
   }
   // show the BYOK panel once we have a transcript
-  if (state.segments.length) el.byok.hidden = false;
+  if (state.segments.length) {
+    el.byok.hidden = false;
+    pushHistoryNow();
+  }
+  for (const row of rows) {
+    const cell = row.children[1] as HTMLTableCellElement | null;
+    if (cell) cell.contentEditable = 'true';
+  }
   refreshCacheStatus();
 }
 
@@ -773,6 +785,48 @@ async function refreshCacheStatus(): Promise<void> {
   }
 }
 
+// ---------- transcript history (undo/redo) ----------
+function snapshotTexts(): string[] {
+  return state.segments.map((segment) => segment.text);
+}
+
+function pushHistoryNow(): void {
+  const snap = snapshotTexts();
+  transcriptHistory = transcriptHistory.slice(0, historyIndex + 1);
+  if (historyIndex >= 0 && JSON.stringify(transcriptHistory[historyIndex]) === JSON.stringify(snap)) return;
+  transcriptHistory.push(snap);
+  historyIndex = transcriptHistory.length - 1;
+}
+
+function scheduleHistoryPush(): void {
+  if (historyTimer) window.clearTimeout(historyTimer);
+  historyTimer = window.setTimeout(pushHistoryNow, 600);
+}
+
+function applyHistory(texts: string[]): void {
+  for (let i = 0; i < state.segments.length && i < texts.length; i++) {
+    state.segments[i].text = texts[i];
+  }
+  for (let i = 0; i < rows.length && i < texts.length; i++) {
+    const cell = rows[i].children[1] as HTMLTableCellElement | null;
+    if (cell) cell.textContent = texts[i];
+  }
+}
+
+function undoHistory(): boolean {
+  if (historyIndex <= 0) return false;
+  historyIndex--;
+  applyHistory(transcriptHistory[historyIndex]);
+  return true;
+}
+
+function redoHistory(): boolean {
+  if (historyIndex >= transcriptHistory.length - 1) return false;
+  historyIndex++;
+  applyHistory(transcriptHistory[historyIndex]);
+  return true;
+}
+
 function wire(): void {
   rows = Array.from(el.tbody.querySelectorAll('tr'));
   state.segments = demoSegments();
@@ -783,6 +837,8 @@ function wire(): void {
     const cell = rows[i].children[1] as HTMLTableCellElement | null;
     if (cell) attachEditHandlers(cell, rows[i]);
   }
+
+  pushHistoryNow();
 
   fillSelect(el.spoken, DEMO_SPOKEN);
   fillSelect(el.byokLang, 'es');
@@ -917,6 +973,17 @@ function wire(): void {
   el.search.addEventListener('input', () => filterTranscript(el.search.value));
 
   el.spoken.addEventListener('change', () => applyLanguage(el.spoken.value === 'en' ? 'en' : el.spoken.value));
+
+  document.addEventListener('keydown', (event) => {
+    const mod = event.ctrlKey || event.metaKey;
+    if (!mod) return;
+    const key = event.key.toLowerCase();
+    if (key === 'z' && !event.shiftKey) {
+      if (undoHistory()) { event.preventDefault(); }
+    } else if ((key === 'z' && event.shiftKey) || key === 'y') {
+      if (redoHistory()) { event.preventDefault(); }
+    }
+  });
 
   el.supportOpen.addEventListener('click', () => {
     if (typeof el.support.showModal === 'function') el.support.showModal();

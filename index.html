@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' https:; worker-src 'self' blob:; frame-src *; base-uri 'self'; form-action 'self';">
 <title>Tannscribe: transcribe and translate any video</title>
 <meta name="description" content="Drop a video, get a transcript with timestamps, and read it in any of 98 languages. Whisper runs in your browser, so your audio and video never leave your device. Free, no account.">
 <meta name="keywords" content="transcribe video, free transcription, whisper, subtitles, SRT, VTT, translate subtitles, speech to text, browser transcription">
@@ -15,6 +16,17 @@
 <meta name="twitter:title" content="Tannscribe: transcribe and translate any video">
 <meta name="twitter:description" content="Free in-browser transcription and translation. Your audio and video never leave your device.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Tannscribe",
+  "description": "Free in-browser transcription and translation. Whisper runs in your browser, so your audio and video never leave your device.",
+  "applicationCategory": "MultimediaApplication",
+  "operatingSystem": "Web",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@100,400;100,500;125,300&display=swap" rel="stylesheet">
@@ -90,7 +102,7 @@
     <p class="cache-status" id="cacheStatus">Model cache: checking…</p>
     <button class="btn btn--ghost" type="button" id="clearCache">Clear cached model</button>
 
-    <div class="progress" id="progress" hidden>
+    <div class="progress" id="progress" hidden role="status" aria-live="polite" aria-atomic="true">
       <div class="progress__track"><span class="progress__fill" id="progressFill"></span></div>
       <p class="progress__label" id="progressLabel">Reading the file</p>
     </div>
@@ -153,12 +165,12 @@
         <textarea id="byokOut" rows="8" placeholder="Translated subtitles appear here."></textarea>
       </div>
     </details>
-    <div class="empty" id="empty" hidden>
+    <div class="empty" id="empty" hidden role="status">
       <h2 id="emptyTitle">No transcript for this file yet</h2>
       <p id="emptyText">Press Transcribe and Whisper will listen to this file in the tab.</p>
     </div>
 
-    <div class="empty empty--error" id="failed" hidden>
+    <div class="empty empty--error" id="failed" hidden role="alert">
       <h2>That file could not be read</h2>
       <p>Try an MP4, MOV, WebM, M4A, MP3, WAV or OGG file. Browsers cannot open every container format, and this page decodes the audio before it sends anything to the model.</p>
     </div>
@@ -246,6 +258,7 @@
   <p class="sheet__fine">Payment link not connected in this build. Replace the href on this link with your Buy Me a Coffee or Lemon Squeezy URL.</p>
   <div class="sheet__row">
     <a class="btn btn--primary" id="supportLink" href="#" rel="noopener">Buy me a coffee</a>
+    <a class="btn btn--ghost" href="mailto:animationmenu40@gmail.com?subject=Tannscribe%20feedback" rel="noopener">Send feedback</a>
     <form method="dialog"><button class="btn btn--ghost" type="submit">Close</button></form>
   </div>
 </dialog>

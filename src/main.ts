@@ -55,8 +55,13 @@ interface ElMap {
   mobileEditorList: HTMLDivElement;
   mobileEditorSave: HTMLButtonElement;
   mobileEditorCancel: HTMLButtonElement;
-  onboardingTip: HTMLDivElement;
-  onboardingDismiss: HTMLButtonElement;
+  onboarding: HTMLDialogElement;
+  onboardingStepLabel: HTMLElement;
+  onboardingStepTitle: HTMLHeadingElement;
+  onboardingStepText: HTMLParagraphElement;
+  onboardingBack: HTMLButtonElement;
+  onboardingNext: HTMLButtonElement;
+  onboardingRestart: HTMLButtonElement;
   byok: HTMLDetailsElement;
   byokKey: HTMLInputElement;
   byokLang: HTMLSelectElement;
@@ -122,6 +127,13 @@ const el = {
   mobileEditorList: $('#mobileEditorList'),
   mobileEditorSave: $('#mobileEditorSave'),
   mobileEditorCancel: $('#mobileEditorCancel'),
+  onboarding: $('#onboarding'),
+  onboardingStepLabel: $('#onboardingStepLabel'),
+  onboardingStepTitle: $('#onboardingStepTitle'),
+  onboardingStepText: $('#onboardingStepText'),
+  onboardingBack: $('#onboardingBack'),
+  onboardingNext: $('#onboardingNext'),
+  onboardingRestart: $('#onboardingRestart'),
   onboardingTip: $('#onboardingTip'),
   onboardingDismiss: $('#onboardingDismiss'),
   byok: $('#byok'),
@@ -1122,16 +1134,47 @@ function wire(): void {
   paintPlayhead();
   renderWaveSegments();
 
-  // onboarding tip (first visit only)
-  try {
-    if (localStorage.getItem('tannscribe.onboardingDismissed') !== '1') {
-      el.onboardingTip.hidden = false;
-    }
-  } catch { /* ignore */ }
-  el.onboardingDismiss.addEventListener('click', () => {
-    el.onboardingTip.hidden = true;
-    try { localStorage.setItem('tannscribe.onboardingDismissed', '1'); } catch { /* ignore */ }
+  // guided onboarding tour (first visit only)
+  let onboardingStep = 1;
+  const ONBOARDING_STEPS = 3;
+  const ONBOARDING_TEXT: Record<number, { title: string; text: string }> = {
+    1: { title: 'Step 1: Upload', text: 'Drop an audio or video file into the drop zone, or press Choose a video. MP4, MOV, WebM, M4A, MP3, WAV, OGG are supported.' },
+    2: { title: 'Step 2: Transcribe and edit', text: 'Press Transcribe. Whisper listens in this tab and writes the transcript with timestamps. You can edit any line or its start and end times.' },
+    3: { title: 'Step 3: Preview and export', text: 'Subtitles play over your video. Style them, then copy or download TXT, SRT or VTT.' },
+  };
+  function renderOnboardingStep(): void {
+    const step = Math.min(onboardingStep, ONBOARDING_STEPS);
+    el.onboardingStepLabel.textContent = 'Step ' + step + ' of ' + ONBOARDING_STEPS;
+    el.onboardingStepTitle.textContent = ONBOARDING_TEXT[step].title;
+    el.onboardingStepText.textContent = ONBOARDING_TEXT[step].text;
+    el.onboardingBack.hidden = step <= 1;
+    el.onboardingNext.textContent = step >= ONBOARDING_STEPS ? 'Finish' : 'Next';
+  }
+  function closeOnboarding(): void {
+    el.onboarding.close();
+    try { localStorage.setItem('tannscribe.onboardingDone', '1'); } catch { /* ignore */ }
+  }
+  function openOnboarding(): void {
+    onboardingStep = 1;
+    renderOnboardingStep();
+    el.onboarding.showModal();
+  }
+  el.onboardingNext.addEventListener('click', () => {
+    if (onboardingStep >= ONBOARDING_STEPS) closeOnboarding();
+    else { onboardingStep += 1; renderOnboardingStep(); }
   });
+  el.onboardingBack.addEventListener('click', () => {
+    if (onboardingStep > 1) { onboardingStep -= 1; renderOnboardingStep(); }
+  });
+  el.onboarding.addEventListener('submit', (event) => {
+    event.preventDefault();
+    closeOnboarding();
+  });
+  el.onboarding.addEventListener('cancel', () => closeOnboarding());
+  el.onboardingRestart.addEventListener('click', () => openOnboarding());
+  try {
+    if (localStorage.getItem('tannscribe.onboardingDone') !== '1') openOnboarding();
+  } catch { /* ignore */ }
   if (location.protocol === 'file:') {
     el.run.disabled = true;
     el.engineNote.textContent = 'Open this page over http. Double click serve.cmd in this folder, then use the address it opens.';

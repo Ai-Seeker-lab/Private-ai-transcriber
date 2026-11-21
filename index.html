@@ -34,12 +34,25 @@
 </head>
 <body>
 
-<div class="onboarding-tip" id="onboardingTip" hidden>
-  <div class="container onboarding-tip__in">
-    <p><strong>New here?</strong> Drop a video or audio file, press Transcribe, then edit, translate and export. Your file never leaves this browser.</p>
-    <button type="button" class="btn btn--ghost" id="onboardingDismiss">Got it</button>
+<dialog class="sheet" id="onboarding" aria-labelledby="onboardingTitle">
+  <h2 id="onboardingTitle">Welcome to Tannscribe</h2>
+  <p class="onboarding__label" id="onboardingStepLabel">Step 1 of 3</p>
+  <ol class="onboarding__steps" id="onboardingSteps" aria-label="Onboarding progress">
+    <li class="onboarding__step" data-step="1">1</li>
+    <li class="onboarding__step" data-step="2">2</li>
+    <li class="onboarding__step" data-step="3">3</li>
+  </ol>
+  <h3 id="onboardingStepTitle">Step 1: Upload</h3>
+  <p id="onboardingStepText">Drop an audio or video file into the drop zone, or press Choose a video. MP4, MOV, WebM, M4A, MP3, WAV, OGG are supported.</p>
+  <div class="sheet__row">
+    <button class="btn btn--ghost" type="button" id="onboardingBack">Back</button>
+    <button class="btn btn--primary" type="button" id="onboardingNext">Next</button>
   </div>
-</div>
+  <form method="dialog">
+    <button class="btn btn--ghost" type="submit" id="onboardingSkip">Skip</button>
+    <button class="btn btn--primary" type="submit" id="onboardingFinish">Finish</button>
+  </form>
+</dialog>
 
 <header class="bar">
   <div class="container bar__in">
@@ -303,6 +316,7 @@
   <div class="sheet__row">
     <a class="btn btn--primary" id="supportLink" href="#" rel="noopener">Buy me a coffee</a>
     <a class="btn btn--ghost" href="mailto:animationmenu40@gmail.com?subject=Tannscribe%20feedback" rel="noopener">Send feedback</a>
+    <button class="btn btn--ghost" type="button" id="onboardingRestart">Restart the guided tour</button>
     <form method="dialog"><button class="btn btn--ghost" type="submit">Close</button></form>
   </div>
 </dialog>

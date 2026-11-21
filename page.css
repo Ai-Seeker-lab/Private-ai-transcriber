@@ -643,11 +643,11 @@ select:disabled { opacity: 0.55; cursor: not-allowed; }
 .mobile-editor__field { display: inline-flex; align-items: center; gap: var(--space-3xs); font-size: var(--text-sm); color: var(--color-muted); }
 .mobile-editor__field input { width: 84px; height: 40px; font-size: 16px; padding: 0 var(--space-2xs); background: var(--color-paper-3); color: var(--color-ink); border: var(--rule-hair) solid var(--color-muted); border-radius: var(--radius-pill); }
 
-/* ---------- onboarding tip ---------- */
-.onboarding-tip { background: var(--color-accent-ink); border-bottom: var(--rule-hair) solid var(--color-accent); }
-.onboarding-tip__in { display: flex; align-items: center; gap: var(--space-md); padding-block: var(--space-sm); }
-.onboarding-tip p { flex: 1 1 auto; color: var(--color-ink); font-size: var(--text-sm); margin: 0; }
-.onboarding-tip strong { color: var(--color-accent); }
+/* ---------- onboarding tour ---------- */
+.onboarding__label { font-size: var(--text-xs); letter-spacing: var(--tracking-display); text-transform: uppercase; color: var(--color-muted); margin-block: var(--space-sm) 0; }
+.onboarding__steps { display: flex; gap: var(--space-2xs); list-style: none; margin: 0 0 var(--space-sm); padding: 0; }
+.onboarding__step { width: 26px; height: 4px; background: var(--color-rule-2); }
+.onboarding__step.is-current { background: var(--color-accent); }
 
 /* ---------- responsive ---------- */
 @media (max-width: 60rem) {

@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => { try { localStorage.setItem('tannscribe.onboardingDone', '1'); } catch { /* ignore */ } });
+});
+
 test('mobile edit times dialog opens, applies and closes', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/');

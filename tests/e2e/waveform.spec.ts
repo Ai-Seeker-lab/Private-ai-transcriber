@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => { try { localStorage.setItem('tannscribe.onboardingDone', '1'); } catch { /* ignore */ } });
+});
+
 test('waveform segment drag moves the transcript timestamp', async ({ page }) => {
   await page.goto('/');
   const row = page.locator('#lines tbody tr').nth(0);

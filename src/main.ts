@@ -23,6 +23,9 @@ interface ElMap {
   vtt: HTMLButtonElement;
   pick: HTMLButtonElement;
   file: HTMLInputElement;
+  dropzone: HTMLDivElement;
+  remove: HTMLButtonElement;
+  search: HTMLInputElement;
   spoken: HTMLSelectElement;
   task: HTMLSelectElement;
   model: HTMLSelectElement;
@@ -51,6 +54,7 @@ interface ElMap {
   byokDl: HTMLButtonElement;
   byokStatus: HTMLParagraphElement;
   byokClear: HTMLButtonElement;
+  byokPersist: HTMLInputElement;
 }
 
 const el = {
@@ -68,6 +72,9 @@ const el = {
   vtt: $('#vtt'),
   pick: $('#pick'),
   file: $('#file'),
+  dropzone: $('#dropzone'),
+  remove: $('#remove'),
+  search: $('#search'),
   spoken: $('#spoken'),
   task: $('#task'),
   model: $('#model'),
@@ -96,11 +103,14 @@ const el = {
   byokDl: $('#byokDl'),
   byokStatus: $('#byokStatus'),
   byokClear: $('#byokClear'),
+  byokPersist: $('#byokPersist'),
 } as ElMap;
 
 const BARS = 160;
 const SAMPLE_LANGS = ['hi', 'es'];
 const DEMO_SPOKEN = 'hi';
+const MAX_FILE_BYTES = 1024 * 1024 * 1024; // 1 GB hard limit
+const WARN_FILE_BYTES = 200 * 1024 * 1024; // 200 MB warning
 
 interface State {
   mode: 'demo' | 'file';
@@ -113,6 +123,9 @@ interface State {
   showTranslation: boolean;
   busy: boolean;
   runTask: Task;
+  startedAt: number | null;
+  elapsedTimer: number | null;
+  progressBase: string;
 }
 
 const state: State = {
@@ -126,6 +139,9 @@ const state: State = {
   showTranslation: true,
   busy: false,
   runTask: 'transcribe',
+  startedAt: null,
+  elapsedTimer: null,
+  progressBase: '',
 };
 
 let rows: HTMLTableRowElement[] = [];
@@ -163,7 +179,8 @@ function nameOf(code: string): string {
 }
 
 function baseName(): string {
-  return el.clipName.textContent.replace(/\.[^.]+$/, '') || 'transcript';
+  const raw = el.clipName.textContent.replace(/\.[^.]+$/, '') || 'transcript';
+  return raw.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').slice(0, 80) || 'transcript';
 }
 
 function flash(button: HTMLElement, text: string): void {
@@ -281,9 +298,23 @@ function peaksFromPcm(pcm: Float32Array, count: number): number[] {
   return peaks;
 }
 
+function attachEditHandlers(cell: HTMLTableCellElement, row: HTMLTableRowElement): void {
+  cell.contentEditable = 'true';
+  cell.spellcheck = true;
+  cell.setAttribute('aria-label', 'Transcript text, editable');
+  const sync = () => {
+    const id = Number(row.dataset.id);
+    const seg = state.segments.find((s) => s.id === id);
+    if (seg) seg.text = cell.textContent?.trim() ?? '';
+  };
+  cell.addEventListener('input', sync);
+  cell.addEventListener('blur', sync);
+}
+
 function rowFor(segment: Segment): HTMLTableRowElement {
   const row = document.createElement('tr');
   row.dataset.t = String(segment.start);
+  row.dataset.id = String(segment.id ?? '');
 
   const cellTime = document.createElement('td');
   const button = document.createElement('button');
@@ -295,6 +326,7 @@ function rowFor(segment: Segment): HTMLTableRowElement {
 
   const cellText = document.createElement('td');
   cellText.textContent = segment.text;
+  attachEditHandlers(cellText, row);
 
   const cellTranslation = document.createElement('td');
   cellTranslation.className = 'tr-line';
@@ -306,6 +338,14 @@ function rowFor(segment: Segment): HTMLTableRowElement {
 function clearRows(): void {
   el.tbody.replaceChildren();
   rows = [];
+}
+
+function filterTranscript(query: string): void {
+  const needle = query.trim().toLowerCase();
+  for (const row of rows) {
+    const text = (row.textContent || '').toLowerCase();
+    row.hidden = needle.length > 0 && !text.includes(needle);
+  }
 }
 
 function addSegment(segment: Segment): void {
@@ -324,6 +364,7 @@ function updateMeta(): void {
 
 function demoSegments(): Segment[] {
   return DEMO.lines.map((line, index) => ({
+    id: index,
     start: line.t,
     end: index + 1 < DEMO.lines.length ? DEMO.lines[index + 1].t : DEMO.clip.duration,
     text: line.text,
@@ -406,6 +447,9 @@ async function decodeToPcm(blob: Blob): Promise<Float32Array> {
   let decoded: AudioBuffer;
   try {
     decoded = await context.decodeAudioData(buffer);
+  } catch {
+    if (context.close) context.close();
+    throw new Error('This browser cannot decode that file. Try MP3, WAV, M4A, MP4, MOV, WebM or OGG.');
   } finally {
     if (context.close) context.close();
   }
@@ -436,6 +480,21 @@ function setFill(ratio: number): void {
   el.fill.style.transform = 'scaleX(' + Math.max(0, Math.min(1, ratio)) + ')';
 }
 
+function elapsedSeconds(): number {
+  return state.startedAt ? Math.max(0, Math.round((Date.now() - state.startedAt) / 1000)) : 0;
+}
+
+function renderProgress(): void {
+  const elapsed = elapsedSeconds();
+  const suffix = state.startedAt ? '  ·  ' + elapsed + 's' : '';
+  el.progressLabel.textContent = state.progressBase + suffix;
+}
+
+function setProgressBase(text: string): void {
+  state.progressBase = text;
+  renderProgress();
+}
+
 function ensureWorker(): Worker {
   if (worker) return worker;
   worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
@@ -450,12 +509,12 @@ function onWorkerMessage(event: MessageEvent): void {
   const message = (event.data || {}) as Record<string, unknown>;
   switch (message.type) {
     case 'status':
-      if (typeof message.text === 'string') el.progressLabel.textContent = message.text;
+      if (typeof message.text === 'string') setProgressBase(message.text);
       break;
     case 'download': {
       const progress = Number(message.progress) || 0;
       setFill(progress / 100);
-      el.progressLabel.textContent = 'Downloading the model, ' + Math.round(progress) + '% (' + size(Number(message.loaded)) + ' of ' + size(Number(message.total)) + ')';
+      setProgressBase('Downloading the model, ' + Math.round(progress) + '% (' + size(Number(message.loaded)) + ' of ' + size(Number(message.total)) + ')');
       break;
     }
     case 'ready':
@@ -468,7 +527,7 @@ function onWorkerMessage(event: MessageEvent): void {
       const done = Number(message.done) || 0;
       const total = Number(message.total) || 0;
       setFill(total ? done / total : 0);
-      el.progressLabel.textContent = 'Listening ' + clock(done) + ' of ' + clock(total);
+      setProgressBase('Listening ' + clock(done) + ' of ' + clock(total));
       break;
     }
     case 'segment':
@@ -489,6 +548,7 @@ function onWorkerMessage(event: MessageEvent): void {
 }
 
 async function runEngine(): Promise<void> {
+  if (state.busy) return;
   const task: Task = el.task.value === 'translate' ? 'translate' : 'transcribe';
   state.busy = true;
   state.runTask = task;
@@ -502,16 +562,21 @@ async function runEngine(): Promise<void> {
   el.toggle.hidden = true;
   el.note.hidden = true;
   el.progress.hidden = false;
-  el.progressLabel.textContent = 'Reading the file';
+  setProgressBase('Reading the file');
   setFill(0.02);
   el.run.textContent = 'Stop';
   el.engineNote.textContent = 'Whisper runs in this tab. Nothing is uploaded.';
   updateMeta();
 
+  state.startedAt = Date.now();
+  if (state.elapsedTimer) window.clearInterval(state.elapsedTimer);
+  state.elapsedTimer = window.setInterval(renderProgress, 1000);
+
   try {
     const pcm = await sourcePcm();
     state.pcm = null;
-    el.progressLabel.textContent = 'Starting the model';
+    setProgressBase('Extracting audio');
+    setFill(0.06);
     ensureWorker().postMessage(
       { type: 'run', audio: pcm, model: el.model.value, task, language: el.spoken.value || 'en' },
       [pcm.buffer]
@@ -527,6 +592,8 @@ function stopRun(): void {
 }
 
 function finishRun(stopped: boolean): void {
+  if (state.elapsedTimer) { window.clearInterval(state.elapsedTimer); state.elapsedTimer = null; }
+  state.startedAt = null;
   state.busy = false;
   el.run.textContent = state.segments.length ? 'Transcribe again' : 'Transcribe';
   el.progress.hidden = true;
@@ -556,6 +623,8 @@ function finishRun(stopped: boolean): void {
 }
 
 function failRun(error: Error): void {
+  if (state.elapsedTimer) { window.clearInterval(state.elapsedTimer); state.elapsedTimer = null; }
+  state.startedAt = null;
   state.busy = false;
   el.run.textContent = 'Transcribe';
   el.progress.hidden = true;
@@ -584,9 +653,32 @@ function once(target: EventTarget, type: string, timeout: number): Promise<void>
 }
 
 async function loadFile(file: File): Promise<void> {
+  if (state.busy) {
+    window.alert('A transcription is already running. Stop it first, or wait for it to finish.');
+    return;
+  }
+
+  if (state.segments.length > 0) {
+    const ok = window.confirm('This will replace the current transcript. Continue?');
+    if (!ok) return;
+  }
+
+  if (!file || file.size === 0) {
+    failRun(new Error('That file is empty.'));
+    return;
+  }
+  if (file.size > MAX_FILE_BYTES) {
+    failRun(new Error('That file is too large (' + size(file.size) + '). The limit is ' + size(MAX_FILE_BYTES) + '.'));
+    return;
+  }
+  if (file.size > WARN_FILE_BYTES) {
+    const ok = window.confirm('This file is ' + size(file.size) + ' and may take a long time and a lot of memory. Continue?');
+    if (!ok) return;
+  }
+
   const looksMedia = /^(video|audio)\//.test(file.type) || /\.(mp4|mov|webm|mkv|m4a|mp3|wav|ogg|oga|flac|aac)$/i.test(file.name);
   if (!looksMedia) {
-    failRun(new Error('That file is not audio or video.'));
+    failRun(new Error('That file is not audio or video. Supported: MP3, MP4, WAV, M4A, MOV, WebM, OGG.'));
     return;
   }
 
@@ -609,6 +701,7 @@ async function loadFile(file: File): Promise<void> {
   el.empty.hidden = true;
   el.failed.hidden = true;
   el.byok.hidden = true;
+  el.remove.hidden = false;
   clearRows();
 
   try {
@@ -619,9 +712,9 @@ async function loadFile(file: File): Promise<void> {
   }
 
   state.duration = el.player.duration || 0;
-  el.metaSize.textContent = el.player.videoWidth && el.player.videoHeight
+  el.metaSize.textContent = (el.player.videoWidth && el.player.videoHeight
     ? el.player.videoWidth + ' by ' + el.player.videoHeight
-    : 'audio only';
+    : 'audio only') + '  ·  ' + size(file.size);
   updateMeta();
 
   el.progress.hidden = false;
@@ -646,6 +739,12 @@ function wire(): void {
   state.segments = demoSegments();
   state.duration = DEMO.clip.duration;
 
+  for (let i = 0; i < rows.length; i++) {
+    rows[i].dataset.id = String(i);
+    const cell = rows[i].children[1] as HTMLTableCellElement | null;
+    if (cell) attachEditHandlers(cell, rows[i]);
+  }
+
   fillSelect(el.spoken, DEMO_SPOKEN);
   fillSelect(el.byokLang, 'es');
   el.byok.hidden = true;
@@ -658,6 +757,13 @@ function wire(): void {
     el.run.disabled = true;
     el.engineNote.textContent = 'Open this page over http. Double click serve.cmd in this folder, then use the address it opens.';
   }
+
+  window.addEventListener('beforeunload', (event) => {
+    if (state.segments.length > 0) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  });
 
   el.player.addEventListener('timeupdate', paintPlayhead);
   el.player.addEventListener('seeked', paintPlayhead);
@@ -711,7 +817,55 @@ function wire(): void {
   el.file.addEventListener('change', (event) => {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (file) loadFile(file);
+    el.file.value = '';
   });
+
+  el.remove.addEventListener('click', () => {
+    if (state.busy) return;
+    if (state.objectUrl) { URL.revokeObjectURL(state.objectUrl); state.objectUrl = null; }
+    state.mode = 'demo';
+    state.showingDemo = true;
+    state.file = null;
+    state.pcm = null;
+    state.segments = demoSegments();
+    state.duration = DEMO.clip.duration;
+    el.player.removeAttribute('src');
+    el.player.load();
+    el.clipName.textContent = DEMO.clip.name;
+    el.frameCap.textContent = DEMO.clip.source + ', ' + DEMO.clip.duration.toFixed(1) + ' s';
+    el.metaSize.textContent = DEMO.clip.width + ' by ' + DEMO.clip.height;
+    updateMeta();
+    clearRows();
+    for (const seg of state.segments) el.tbody.appendChild(rowFor(seg));
+    rows = Array.from(el.tbody.querySelectorAll('tr'));
+    drawBars(DEMO.bars);
+    applyLanguage('hi');
+    el.spoken.value = 'hi';
+    el.byok.hidden = true;
+    el.remove.hidden = true;
+    el.search.value = '';
+    filterTranscript('');
+  });
+
+  // Drag and drop
+  const dropzone = el.dropzone;
+  const prevent = (event: DragEvent) => { event.preventDefault(); event.stopPropagation(); };
+  dropzone.addEventListener('dragenter', (event) => { prevent(event); dropzone.classList.add('is-dragging'); });
+  dropzone.addEventListener('dragover', (event) => { prevent(event); dropzone.classList.add('is-dragging'); });
+  dropzone.addEventListener('dragleave', (event) => { prevent(event); dropzone.classList.remove('is-dragging'); });
+  dropzone.addEventListener('drop', (event) => {
+    prevent(event);
+    dropzone.classList.remove('is-dragging');
+    const file = event.dataTransfer?.files?.[0];
+    if (file) loadFile(file);
+  });
+  dropzone.addEventListener('click', () => el.file.click());
+  dropzone.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); el.file.click(); }
+  });
+
+  // Search
+  el.search.addEventListener('input', () => filterTranscript(el.search.value));
 
   el.spoken.addEventListener('change', () => applyLanguage(el.spoken.value === 'en' ? 'en' : el.spoken.value));
 
@@ -731,21 +885,68 @@ function wire(): void {
 
   // BYOK Gemini translator
   const KEY_STORAGE = 'tannscribe.geminiKey';
-  const storedKey = localStorage.getItem(KEY_STORAGE);
-  if (storedKey) el.byokKey.value = storedKey;
+  const KEY_PERSIST = 'tannscribe.geminiKey.persist';
 
+  function readStoredKey(): string {
+    try {
+      if (localStorage.getItem(KEY_PERSIST) === '1') return localStorage.getItem(KEY_STORAGE) || '';
+      return sessionStorage.getItem(KEY_STORAGE) || '';
+    } catch {
+      return '';
+    }
+  }
+  function writeStoredKey(value: string): void {
+    try {
+      if (el.byokPersist.checked) {
+        localStorage.setItem(KEY_STORAGE, value);
+        localStorage.setItem(KEY_PERSIST, '1');
+        sessionStorage.removeItem(KEY_STORAGE);
+      } else {
+        sessionStorage.setItem(KEY_STORAGE, value);
+        localStorage.removeItem(KEY_STORAGE);
+        localStorage.removeItem(KEY_PERSIST);
+      }
+    } catch {
+      // storage may be unavailable (private mode); keep the key in memory only
+    }
+  }
+  function clearStoredKey(): void {
+    try {
+      sessionStorage.removeItem(KEY_STORAGE);
+      localStorage.removeItem(KEY_STORAGE);
+      localStorage.removeItem(KEY_PERSIST);
+    } catch { /* ignore */ }
+  }
+
+  const storedKey = readStoredKey();
+  if (storedKey) {
+    el.byokKey.value = storedKey;
+    el.byokPersist.checked = localStorage.getItem(KEY_PERSIST) === '1';
+  }
+
+  el.byokPersist.addEventListener('change', () => {
+    const value = el.byokKey.value.trim();
+    if (value) writeStoredKey(value);
+  });
   el.byokKey.addEventListener('change', () => {
-    localStorage.setItem(KEY_STORAGE, el.byokKey.value.trim());
+    const value = el.byokKey.value.trim();
+    if (value) writeStoredKey(value);
+    else clearStoredKey();
   });
   el.byokClear.addEventListener('click', () => {
-    localStorage.removeItem(KEY_STORAGE);
+    clearStoredKey();
     el.byokKey.value = '';
+    el.byokPersist.checked = false;
     el.byokStatus.textContent = 'Key cleared.';
   });
 
   el.byokRun.addEventListener('click', async () => {
     const key = el.byokKey.value.trim();
     if (!key) { el.byokStatus.textContent = 'Paste your Gemini API key first.'; return; }
+    if (!/^AIza[0-9A-Za-z_-]{20,}$/.test(key)) {
+      el.byokStatus.textContent = 'That does not look like a Gemini key (they usually start with AIza).';
+      return;
+    }
     if (!state.segments.length) { el.byokStatus.textContent = 'Transcribe a file first.'; return; }
     el.byokRun.disabled = true;
     el.byokStatus.textContent = 'Translating...';
@@ -757,14 +958,24 @@ function wire(): void {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
       });
-      if (!resp.ok) throw new Error('Gemini returned ' + resp.status);
+      if (resp.status === 400) throw new Error('Bad request. Check the transcript and try again.');
+      if (resp.status === 401 || resp.status === 403) throw new Error('The API key was rejected. Check it and try again.');
+      if (resp.status === 429) throw new Error('Rate limit reached. Wait a moment and retry.');
+      if (resp.status >= 500) throw new Error('Gemini is unavailable right now. Try again later.');
+      if (!resp.ok) throw new Error('Gemini returned ' + resp.status + '.');
       const data = await resp.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
       const out = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!out) throw new Error('No translation returned');
+      if (!out) throw new Error('No translation returned. The model may have refused the request.');
       el.byokOut.value = out.trim();
       el.byokStatus.textContent = 'Done. Review before use.';
+      writeStoredKey(key);
     } catch (error) {
-      el.byokStatus.textContent = 'Failed: ' + (error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      if (/Failed to fetch|NetworkError|Load failed/i.test(message)) {
+        el.byokStatus.textContent = 'Network error. Check your connection and retry.';
+      } else {
+        el.byokStatus.textContent = 'Failed: ' + message;
+      }
     } finally {
       el.byokRun.disabled = false;
     }

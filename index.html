@@ -59,6 +59,11 @@
       </div>
     </div>
 
+    <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Drop a video or audio file here, or press Enter to choose one">
+      <p class="dropzone__title">Drop a video or audio file here</p>
+      <p class="dropzone__hint">or click to choose one. MP3, MP4, WAV, M4A, MOV, WebM, OGG. Files stay on this device.</p>
+    </div>
+
     <div class="engine">
       <div class="field">
         <label class="engine__label" for="spoken">Spoken</label>
@@ -96,6 +101,8 @@
       <button class="btn btn--ghost" type="button" id="txt" aria-label="Download as plain text">TXT</button>
       <button class="btn btn--ghost" type="button" id="srt" aria-label="Download as SRT subtitles">SRT</button>
       <button class="btn btn--ghost" type="button" id="vtt" aria-label="Download as WebVTT subtitles">VTT</button>
+      <button class="btn btn--ghost" type="button" id="remove" hidden>Remove file</button>
+      <input type="search" id="search" class="search" placeholder="Search transcript…" aria-label="Search transcript">
       <p class="toolbar__note" id="note" hidden></p>
     </div>
 
@@ -137,6 +144,8 @@
           <button class="btn btn--ghost" type="button" id="byokDl">Download translated .srt</button>
           <button class="btn btn--ghost" type="button" id="byokClear">Clear key</button>
         </div>
+        <label class="byok__persist"><input type="checkbox" id="byokPersist"> Remember this key on this device</label>
+        <p class="byok__privacy">The transcript text is sent to Google’s Gemini API using your key. The key is kept in this browser only.</p>
         <p class="byok__status" id="byokStatus"></p>
         <textarea id="byokOut" rows="8" placeholder="Translated subtitles appear here."></textarea>
       </div>
@@ -204,6 +213,10 @@
       <details>
         <summary>What about very long files?</summary>
         <p>Long files work but take time. Keep the tab open and the device awake until it finishes.</p>
+      </details>
+      <details>
+        <summary>Are third-party services used?</summary>
+        <p>Transcription and English translation run locally. The optional Gemini translator sends only the transcript text to Google, using your own key. The page also shows ads served by a third-party network, which may set cookies. No audio or video file is ever uploaded.</p>
       </details>
     </div>
   </div>

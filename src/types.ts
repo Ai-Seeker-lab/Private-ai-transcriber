@@ -27,6 +27,7 @@ export interface Demo {
 }
 
 export interface Segment {
+  id?: number;
   start: number;
   end: number;
   text: string;

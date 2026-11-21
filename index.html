@@ -137,6 +137,7 @@
       <button class="btn btn--ghost" type="button" id="srt" aria-label="Download as SRT subtitles">SRT</button>
       <button class="btn btn--ghost" type="button" id="vtt" aria-label="VTT: download as WebVTT subtitles">VTT</button>
       <button class="btn btn--ghost" type="button" id="remove" hidden>Remove file</button>
+      <button class="btn btn--ghost mob-edit" type="button" id="mobEdit">Edit times</button>
       <input type="search" id="search" class="search" placeholder="Search transcript…" aria-label="Search transcript">
       <p class="toolbar__note" id="note" hidden></p>
     </div>
@@ -283,6 +284,17 @@
     </div>
   </div>
 </footer>
+
+<dialog class="sheet" id="mobileEditor" aria-labelledby="mobileEditorTitle">
+  <h2 id="mobileEditorTitle">Edit timestamps</h2>
+  <p>Enter times in seconds. The video preview and waveform update when you save.</p>
+  <div class="sheet__fine">Leave a value empty or invalid to skip that line.</div>
+  <div class="mobile-editor__list" id="mobileEditorList"></div>
+  <div class="sheet__row">
+    <button class="btn btn--ghost" type="button" id="mobileEditorCancel">Cancel</button>
+    <button class="btn btn--primary" type="button" id="mobileEditorSave">Save</button>
+  </div>
+</dialog>
 
 <dialog class="sheet" id="support" aria-labelledby="supportTitle">
   <h2 id="supportTitle">Support Tannscribe</h2>

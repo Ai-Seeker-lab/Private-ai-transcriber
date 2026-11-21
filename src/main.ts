@@ -50,6 +50,11 @@ interface ElMap {
   support: HTMLDialogElement;
   supportOpen: HTMLButtonElement;
   supportLink: HTMLAnchorElement;
+  mobEdit: HTMLButtonElement;
+  mobileEditor: HTMLDialogElement;
+  mobileEditorList: HTMLDivElement;
+  mobileEditorSave: HTMLButtonElement;
+  mobileEditorCancel: HTMLButtonElement;
   onboardingTip: HTMLDivElement;
   onboardingDismiss: HTMLButtonElement;
   byok: HTMLDetailsElement;
@@ -112,6 +117,11 @@ const el = {
   support: $('#support'),
   supportOpen: $('#supportOpen'),
   supportLink: $('#supportLink'),
+  mobEdit: $('.mob-edit'),
+  mobileEditor: $('#mobileEditor'),
+  mobileEditorList: $('#mobileEditorList'),
+  mobileEditorSave: $('#mobileEditorSave'),
+  mobileEditorCancel: $('#mobileEditorCancel'),
   onboardingTip: $('#onboardingTip'),
   onboardingDismiss: $('#onboardingDismiss'),
   byok: $('#byok'),
@@ -1295,6 +1305,85 @@ function wire(): void {
       flash(el.supportLink, 'No link set yet');
     }
   });
+
+  function openMobileEditor(): void {
+    const list = el.mobileEditorList;
+    list.replaceChildren();
+    for (const seg of state.segments) {
+      const entry = document.createElement('div');
+      entry.className = 'mobile-editor__row';
+      entry.dataset.id = String(seg.id ?? '');
+      const startField = document.createElement('label');
+      startField.className = 'mobile-editor__field';
+      const startInput = document.createElement('input');
+      startInput.type = 'number';
+      startInput.min = '0';
+      startInput.step = '0.1';
+      startInput.value = seg.start.toFixed(1);
+      startInput.dataset.role = 'start';
+      startField.append(document.createTextNode('Start'), startInput);
+      const endField = document.createElement('label');
+      endField.className = 'mobile-editor__field';
+      const endInput = document.createElement('input');
+      endInput.type = 'number';
+      endInput.min = '0';
+      endInput.step = '0.1';
+      endInput.value = seg.end.toFixed(1);
+      endInput.dataset.role = 'end';
+      endField.append(document.createTextNode('End'), endInput);
+      entry.append(startField, endField);
+      list.appendChild(entry);
+    }
+    el.mobileEditor.showModal();
+  }
+
+  function saveMobileEditor(): void {
+    const entries = Array.from(el.mobileEditorList.querySelectorAll<HTMLElement>('.mobile-editor__row'));
+    const changes: { seg: Segment; start: number; end: number }[] = [];
+    for (const entry of entries) {
+      const id = Number(entry.dataset.id);
+      const startInput = entry.querySelector<HTMLInputElement>('[data-role="start"]');
+      const endInput = entry.querySelector<HTMLInputElement>('[data-role="end"]');
+      if (!startInput || !endInput) continue;
+      const newStart = parseFloat(startInput.value);
+      const newEnd = parseFloat(endInput.value);
+      if (isNaN(newStart) || isNaN(newEnd) || newEnd <= newStart) continue;
+      const idx = state.segments.findIndex((s) => s.id === id);
+      const seg = idx >= 0 ? state.segments[idx] : null;
+      if (!seg) continue;
+      const prev = idx > 0 ? state.segments[idx - 1] : null;
+      const next = idx < state.segments.length - 1 ? state.segments[idx + 1] : null;
+      if (prev && newStart < prev.end) continue;
+      if (next && newEnd > next.start) continue;
+      changes.push({ seg, start: newStart, end: newEnd });
+    }
+    if (changes.length) {
+      for (const change of changes) {
+        change.seg.start = change.start;
+        change.seg.end = change.end;
+      }
+      pushHistoryNow();
+      for (let i = 0; i < rows.length && i < state.segments.length; i++) {
+        const rowEl = rows[i];
+        const seg = state.segments[i];
+        if (!seg) break;
+        rowEl.dataset.t = String(seg.start);
+        const btn = rowEl.querySelector('.tc') as HTMLButtonElement | null;
+        if (btn) { btn.dataset.seek = String(seg.start); btn.textContent = clock(seg.start); }
+      }
+      renderWaveSegments();
+      paintPlayhead();
+    }
+    el.mobileEditor.close();
+  }
+
+  el.mobEdit.addEventListener('click', () => {
+    if (!state.segments.length) { el.byokStatus.textContent = 'Transcribe a file first.'; return; }
+    openMobileEditor();
+  });
+  el.mobileEditorSave.addEventListener('click', () => saveMobileEditor());
+  el.mobileEditorCancel.addEventListener('click', () => el.mobileEditor.close());
+  el.mobileEditor.addEventListener('cancel', () => el.mobileEditor.close());
 
   // BYOK Gemini translator
   const KEY_STORAGE = 'tannscribe.geminiKey';

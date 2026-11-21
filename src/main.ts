@@ -50,6 +50,8 @@ interface ElMap {
   support: HTMLDialogElement;
   supportOpen: HTMLButtonElement;
   supportLink: HTMLAnchorElement;
+  onboardingTip: HTMLDivElement;
+  onboardingDismiss: HTMLButtonElement;
   byok: HTMLDetailsElement;
   byokKey: HTMLInputElement;
   byokLang: HTMLSelectElement;
@@ -110,6 +112,8 @@ const el = {
   support: $('#support'),
   supportOpen: $('#supportOpen'),
   supportLink: $('#supportLink'),
+  onboardingTip: $('#onboardingTip'),
+  onboardingDismiss: $('#onboardingDismiss'),
   byok: $('#byok'),
   byokKey: $('#byokKey'),
   byokLang: $('#byokLang'),
@@ -1048,7 +1052,16 @@ function wire(): void {
   paintPlayhead();
   renderWaveSegments();
 
-  if (location.protocol === 'file:') {
+  // onboarding tip (first visit only)
+  try {
+    if (localStorage.getItem('tannscribe.onboardingDismissed') !== '1') {
+      el.onboardingTip.hidden = false;
+    }
+  } catch { /* ignore */ }
+  el.onboardingDismiss.addEventListener('click', () => {
+    el.onboardingTip.hidden = true;
+    try { localStorage.setItem('tannscribe.onboardingDismissed', '1'); } catch { /* ignore */ }
+  });
     el.run.disabled = true;
     el.engineNote.textContent = 'Open this page over http. Double click serve.cmd in this folder, then use the address it opens.';
   }

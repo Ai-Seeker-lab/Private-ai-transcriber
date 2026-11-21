@@ -597,6 +597,27 @@ select:disabled { opacity: 0.55; cursor: not-allowed; }
   z-index: 2;
 }
 .wave__seg:hover { background: var(--color-wave-seg-hover); }
+.wave__seg.is-dragging { background: var(--color-wave-seg-hover); }
+.wave__seg::before,
+.wave__seg::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  margin-left: var(--space-2xs);
+  background: var(--color-accent);
+  border-radius: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-micro) linear;
+}
+.wave__seg::before { left: 0; }
+.wave__seg::after { right: 0; }
+.wave__seg:hover::before,
+.wave__seg:hover::after,
+.wave__seg.is-dragging::before,
+.wave__seg.is-dragging::after { opacity: 1; }
 
 /* ---------- time edit ---------- */
 .time-edit { display: inline-flex; align-items: center; gap: var(--space-3xs); }

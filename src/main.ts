@@ -175,7 +175,12 @@ const state: State = {
 
 let rows: HTMLTableRowElement[] = [];
 let worker: Worker | null = null;
-let transcriptHistory: string[][] = [];
+interface Snapshot {
+  texts: string[];
+  starts: number[];
+  ends: number[];
+}
+let transcriptHistory: Snapshot[] = [];
 let historyIndex = -1;
 let historyTimer: number | null = null;
 
@@ -249,36 +254,77 @@ function applyLanguage(code: string): void {
   }
 }
 
-let dragState: { seg: Segment; div: HTMLDivElement; duration: number; startX: number; origStart: number; origEnd: number; moved: boolean } | null = null;
+let dragState: {
+  seg: Segment;
+  div: HTMLDivElement;
+  duration: number;
+  startX: number;
+  origStart: number;
+  origEnd: number;
+  moved: boolean;
+  mode: 'move' | 'resize-start' | 'resize-end';
+} | null = null;
 
 function beginSegmentDrag(event: PointerEvent, seg: Segment, div: HTMLDivElement, duration: number): void {
   if (state.busy) return;
   event.preventDefault();
   event.stopPropagation();
   try { div.setPointerCapture(event.pointerId); } catch { /* ignore */ }
-  dragState = { seg, div, duration, startX: event.clientX, origStart: seg.start, origEnd: seg.end, moved: false };
+
+  const segRect = div.getBoundingClientRect();
+  const edgeZone = Math.min(10, Math.max(6, segRect.width * 0.12));
+  const xInSeg = event.clientX - segRect.left;
+  const mode: 'move' | 'resize-start' | 'resize-end' = xInSeg <= edgeZone ? 'resize-start' : xInSeg >= segRect.width - edgeZone ? 'resize-end' : 'move';
+
+  div.classList.add('is-dragging');
+  dragState = { seg, div, duration, startX: event.clientX, origStart: seg.start, origEnd: seg.end, moved: false, mode };
   const onMove = (e: PointerEvent) => {
     if (!dragState) return;
-    const rect = el.wave.getBoundingClientRect();
-    const deltaSec = ((e.clientX - dragState.startX) / rect.width) * dragState.duration;
+    const waveRect = el.wave.getBoundingClientRect();
+    const mouseTime = ((e.clientX - waveRect.left) / waveRect.width) * dragState.duration;
     if (Math.abs(e.clientX - dragState.startX) > 3) dragState.moved = true;
-    const len = dragState.origEnd - dragState.origStart;
-    let newStart = dragState.origStart + deltaSec;
-    let newEnd = dragState.origEnd + deltaSec;
-    if (newStart < 0) { newStart = 0; newEnd = len; }
-    if (newEnd > dragState.duration) { newEnd = dragState.duration; newStart = newEnd - len; }
-    const idx = state.segments.findIndex((s) => s.id === dragState!.seg.id);
+    const seg = dragState.seg;
+    const idx = state.segments.findIndex((s) => s.id === seg.id);
     const prev = idx > 0 ? state.segments[idx - 1] : null;
     const next = idx < state.segments.length - 1 ? state.segments[idx + 1] : null;
-    if (prev && newStart < prev.end) { newStart = prev.end; newEnd = newStart + len; }
-    if (next && newEnd > next.start) { newEnd = next.start; newStart = newEnd - len; }
-    if (newStart < 0 || newEnd > dragState.duration || newEnd <= newStart) return;
-    dragState.seg.start = newStart;
-    dragState.seg.end = newEnd;
-    dragState.div.style.left = (newStart / dragState.duration * 100) + '%';
-    dragState.div.style.width = Math.max(0.5, (newEnd - newStart) / dragState.duration * 100) + '%';
+    const minDur = 0.3;
+
+    if (dragState.mode === 'move') {
+      const len = dragState.origEnd - dragState.origStart;
+      let newStart = dragState.origStart + ((e.clientX - dragState.startX) / waveRect.width) * dragState.duration;
+      let newEnd = dragState.origEnd + ((e.clientX - dragState.startX) / waveRect.width) * dragState.duration;
+      if (newStart < 0) { newStart = 0; newEnd = len; }
+      if (newEnd > dragState.duration) { newEnd = dragState.duration; newStart = newEnd - len; }
+      if (prev && newStart < prev.end) { newStart = prev.end; newEnd = newStart + len; }
+      if (next && newEnd > next.start) { newEnd = next.start; newStart = newEnd - len; }
+      if (newStart < 0 || newEnd > dragState.duration || newEnd <= newStart) return;
+      seg.start = newStart;
+      seg.end = newEnd;
+    } else if (dragState.mode === 'resize-start') {
+      let newStart = mouseTime;
+      if (newStart < 0) newStart = 0;
+      if (prev && newStart < prev.end) newStart = prev.end;
+      if (newStart > dragState.origEnd - minDur) newStart = dragState.origEnd - minDur;
+      if (newStart < 0) return;
+      seg.start = newStart;
+      seg.end = dragState.origEnd;
+    } else if (dragState.mode === 'resize-end') {
+      let newEnd = mouseTime;
+      if (newEnd > dragState.duration) newEnd = dragState.duration;
+      if (next && newEnd > next.start) newEnd = next.start;
+      if (newEnd < dragState.origStart + minDur) newEnd = dragState.origStart + minDur;
+      if (newEnd > dragState.duration) return;
+      seg.start = dragState.origStart;
+      seg.end = newEnd;
+    }
+
+    dragState.div.style.left = (seg.start / dragState.duration * 100) + '%';
+    dragState.div.style.width = Math.max(0.5, (seg.end - seg.start) / dragState.duration * 100) + '%';
   };
   const onUp = () => {
+    if (dragState) {
+      dragState.div.classList.remove('is-dragging');
+    }
     if (dragState && dragState.moved) {
       const row = rows.find((r) => Number(r.dataset.id) === dragState!.seg.id);
       if (row) {
@@ -987,12 +1033,16 @@ async function refreshCacheStatus(): Promise<void> {
 }
 
 // ---------- transcript history (undo/redo) ----------
-function snapshotTexts(): string[] {
-  return state.segments.map((segment) => segment.text);
+function snapshot(): Snapshot {
+  return {
+    texts: state.segments.map((segment) => segment.text),
+    starts: state.segments.map((segment) => segment.start),
+    ends: state.segments.map((segment) => segment.end),
+  };
 }
 
 function pushHistoryNow(): void {
-  const snap = snapshotTexts();
+  const snap = snapshot();
   transcriptHistory = transcriptHistory.slice(0, historyIndex + 1);
   if (historyIndex >= 0 && JSON.stringify(transcriptHistory[historyIndex]) === JSON.stringify(snap)) return;
   transcriptHistory.push(snap);
@@ -1004,14 +1054,24 @@ function scheduleHistoryPush(): void {
   historyTimer = window.setTimeout(pushHistoryNow, 600);
 }
 
-function applyHistory(texts: string[]): void {
-  for (let i = 0; i < state.segments.length && i < texts.length; i++) {
-    state.segments[i].text = texts[i];
+function applyHistory(snap: Snapshot): void {
+  const count = Math.min(state.segments.length, snap.texts.length);
+  for (let i = 0; i < count; i++) {
+    state.segments[i].text = snap.texts[i];
+    state.segments[i].start = snap.starts[i];
+    state.segments[i].end = snap.ends[i];
   }
-  for (let i = 0; i < rows.length && i < texts.length; i++) {
-    const cell = rows[i].children[1] as HTMLTableCellElement | null;
-    if (cell) cell.textContent = texts[i];
+  for (let i = 0; i < rows.length && i < count; i++) {
+    const row = rows[i];
+    const seg = state.segments[i];
+    row.dataset.t = String(seg.start);
+    const btn = row.querySelector('.tc') as HTMLButtonElement | null;
+    if (btn) { btn.dataset.seek = String(seg.start); btn.textContent = clock(seg.start); }
+    const cell = row.children[1] as HTMLTableCellElement | null;
+    if (cell) cell.textContent = seg.text;
   }
+  renderWaveSegments();
+  paintPlayhead();
 }
 
 function undoHistory(): boolean {

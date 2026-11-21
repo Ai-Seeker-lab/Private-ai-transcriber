@@ -54,7 +54,12 @@ public/          demo clip, poster, favicon (copied verbatim into dist/)
 
 `transformers.js` is imported at runtime from jsDelivr and marked `@vite-ignore`, so it never enters
 the bundle. Only `dist/transformers.min.js` is loadable in a browser; `transformers.web.js` resolves
-a bare `onnxruntime-web/webgpu` specifier and fails.
+a bare `onnxruntime-web/webgpu` specifier and fails. If jsDelivr is unreachable the worker falls back
+to unpkg.
+
+The worker registers its `message` listener synchronously, before any import, and loads the library
+lazily inside the first run. A top-level `await` in a module worker leaves the scope without a
+listener while it resolves, and a run request posted in that window is dropped silently.
 
 ## Notes
 

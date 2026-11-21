@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Nothing here is behind a login and no path is private.
+# Ad crawlers are welcome to read the page so the ad units render correctly.
+User-agent: Mediapartners-Google
+Allow: /
+
+Sitemap: https://private-ai-transcriber.chucklescrazy9.workers.dev/sitemap.xml

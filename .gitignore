@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .hallmark/
+_*.mjs
 *.log
 .DS_Store
 Thumbs.db

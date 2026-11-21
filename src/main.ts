@@ -774,6 +774,64 @@ function wire(): void {
     if (!el.byokOut.value.trim()) { el.byokStatus.textContent = 'Nothing to download yet.'; return; }
     download(baseName() + '.' + el.byokLang.value + '.srt', el.byokOut.value, 'application/x-subrip');
   });
+
+  scheduleNativeAd();
+}
+
+// ---------- Adsterra native banner ----------
+// The network fixes both the container id and the script URL, so they live here
+// as constants rather than being edited in two places.
+const NATIVE_AD_ID = '4088cc0abf2b2b1c016fe346107b415b';
+const NATIVE_AD_SRC = 'https://bellnewyork.org/21/4088cc0abf2b2b1c016fe346107b415b';
+
+function mountNativeAd(): void {
+  // The network injects into this exact element, so it has to exist first.
+  const slot = document.getElementById('container-' + NATIVE_AD_ID);
+  if (!slot) return;
+
+  // Idempotent: the loader can run again on a hot reload or a second mount
+  // without stacking a duplicate script tag, which would double the requests.
+  if (document.querySelector('script[data-native-ad="' + NATIVE_AD_ID + '"]')) return;
+
+  const script = document.createElement('script');
+  script.async = true;
+  script.setAttribute('data-cfasync', 'false');
+  script.setAttribute('data-native-ad', NATIVE_AD_ID);
+  script.src = NATIVE_AD_SRC;
+  script.addEventListener('error', () => hideNativeAd());
+  document.body.appendChild(script);
+
+  // The network can decline to fill: an ad blocker, a blocked region, or an
+  // origin it does not recognise. Rather than leave a labelled empty band,
+  // collapse the section if nothing has rendered after a fair wait.
+  const giveUp = window.setTimeout(() => {
+    if (slot.childElementCount === 0) hideNativeAd();
+  }, 15000);
+
+  const observer = new MutationObserver(() => {
+    if (slot.childElementCount > 0) {
+      observer.disconnect();
+      window.clearTimeout(giveUp);
+    }
+  });
+  observer.observe(slot, { childList: true, subtree: true });
+}
+
+function hideNativeAd(): void {
+  const slot = document.getElementById('container-' + NATIVE_AD_ID);
+  const section = slot ? slot.closest('.native-ad') : null;
+  if (section instanceof HTMLElement) section.hidden = true;
+}
+
+function scheduleNativeAd(): void {
+  // Deferred to idle so the ad request never competes with decoding, the model
+  // download or the transcription loop for bandwidth and main-thread time.
+  const idle = (window as Window & {
+    requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+  }).requestIdleCallback;
+
+  if (typeof idle === 'function') idle(mountNativeAd, { timeout: 3000 });
+  else window.setTimeout(mountNativeAd, 1200);
 }
 
 if (document.readyState === 'loading') {

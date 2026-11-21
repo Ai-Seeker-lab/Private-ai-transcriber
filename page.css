@@ -418,6 +418,27 @@ select:disabled { opacity: 0.55; cursor: not-allowed; }
   border-radius: var(--radius-card);
 }
 
+/* ---------- native ad band ---------- */
+.native-ad {
+  border-top: var(--rule-hair) solid var(--color-rule);
+  padding-block: var(--space-lg) var(--space-md);
+}
+.native-ad__label {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  margin-bottom: var(--space-sm);
+}
+.native-ad__slot {
+  display: flex;
+  justify-content: center;
+  max-width: 100%;
+  overflow: hidden;
+}
+.native-ad__slot iframe,
+.native-ad__slot img {
+  max-width: 100%;
+}
+
 /* ---------- SEO content section ---------- */
 .content {
   border-top: var(--rule-hair) solid var(--color-rule);

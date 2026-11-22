@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' https:; worker-src 'self' blob:; frame-src *; base-uri 'self'; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' https:; worker-src 'self' blob:; frame-src *; base-uri 'self'; form-action 'self';">
 <title>Tannscribe: transcribe and translate any video</title>
 <meta name="description" content="Drop a video, get a transcript with timestamps, and read it in any of 98 languages. Whisper runs in your browser, so your audio and video never leave your device. Free, no account.">
 <meta name="keywords" content="transcribe video, free transcription, whisper, subtitles, SRT, VTT, translate subtitles, speech to text, browser transcription">
@@ -50,7 +50,6 @@
   </div>
   <form method="dialog">
     <button class="btn btn--ghost" type="submit" id="onboardingSkip">Skip</button>
-    <button class="btn btn--primary" type="submit" id="onboardingFinish">Finish</button>
   </form>
 </dialog>
 

@@ -6,13 +6,20 @@ test('first visit opens the three step onboarding and finishes it', async ({ pag
   await expect(dialog).toBeVisible();
   await expect(page.locator('#onboardingStepLabel')).toHaveText('Step 1 of 3');
   await expect(page.locator('#onboardingStepTitle')).toHaveText('Step 1: Upload');
+  // Only the current dot is marked, and no premature finish button exists.
+  await expect(page.locator('.onboarding__step[aria-current="step"]')).toHaveCount(1);
+  await expect(page.locator('.onboarding__step[data-step="1"]')).toHaveAttribute('aria-current', 'step');
+  await expect(page.locator('#onboardingFinish')).toHaveCount(0);
+  await expect(page.locator('#onboardingNext')).toHaveText('Next');
   await page.click('#onboardingNext');
   await expect(page.locator('#onboardingStepTitle')).toHaveText('Step 2: Transcribe and edit');
+  await expect(page.locator('.onboarding__step[data-step="2"]')).toHaveAttribute('aria-current', 'step');
   await page.click('#onboardingBack');
   await expect(page.locator('#onboardingStepTitle')).toHaveText('Step 1: Upload');
   await page.click('#onboardingNext');
   await page.click('#onboardingNext');
   await expect(page.locator('#onboardingStepTitle')).toHaveText('Step 3: Preview and export');
+  await expect(page.locator('#onboardingNext')).toHaveText('Finish');
   await page.click('#onboardingNext');
   await expect(dialog).toBeHidden();
   await page.reload();

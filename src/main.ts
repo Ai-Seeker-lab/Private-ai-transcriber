@@ -56,6 +56,7 @@ interface ElMap {
   mobileEditorSave: HTMLButtonElement;
   mobileEditorCancel: HTMLButtonElement;
   onboarding: HTMLDialogElement;
+  onboardingSteps: HTMLOListElement;
   onboardingStepLabel: HTMLElement;
   onboardingStepTitle: HTMLHeadingElement;
   onboardingStepText: HTMLParagraphElement;
@@ -128,6 +129,7 @@ const el = {
   mobileEditorSave: $('#mobileEditorSave'),
   mobileEditorCancel: $('#mobileEditorCancel'),
   onboarding: $('#onboarding'),
+  onboardingSteps: $('#onboardingSteps') as HTMLOListElement,
   onboardingStepLabel: $('#onboardingStepLabel'),
   onboardingStepTitle: $('#onboardingStepTitle'),
   onboardingStepText: $('#onboardingStepText'),
@@ -1147,6 +1149,13 @@ function wire(): void {
     el.onboardingStepText.textContent = ONBOARDING_TEXT[step].text;
     el.onboardingBack.hidden = step <= 1;
     el.onboardingNext.textContent = step >= ONBOARDING_STEPS ? 'Finish' : 'Next';
+    const dots = el.onboardingSteps.querySelectorAll<HTMLElement>('.onboarding__step');
+    dots.forEach((dot, index) => {
+      const current = index + 1 === step;
+      dot.classList.toggle('is-current', current);
+      if (current) dot.setAttribute('aria-current', 'step');
+      else dot.removeAttribute('aria-current');
+    });
   }
   function closeOnboarding(): void {
     el.onboarding.close();
@@ -1568,7 +1577,7 @@ function mountNativeAd(): void {
   // origin it does not recognise. Rather than leave a labelled empty band,
   // collapse the section if nothing has rendered after a fair wait.
   const giveUp = window.setTimeout(() => {
-    if (slot.childElementCount === 0) hideNativeAd();
+    if (slot.childElementCount === 0 || slot.clientHeight === 0) hideNativeAd();
   }, 15000);
 
   const observer = new MutationObserver(() => {

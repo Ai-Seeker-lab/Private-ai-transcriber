@@ -157,7 +157,7 @@ const el = {
 
 const BARS = 160;
 const SAMPLE_LANGS = ['hi', 'es'];
-const DEMO_SPOKEN = 'hi';
+const DEMO_SPOKEN = 'en';
 const MAX_FILE_BYTES = 1024 * 1024 * 1024; // 1 GB hard limit
 const WARN_FILE_BYTES = 200 * 1024 * 1024; // 200 MB warning
 
@@ -258,7 +258,7 @@ function applyLanguage(code: string): void {
       setTranslation(false);
       el.toggle.hidden = true;
       el.note.hidden = false;
-      el.note.textContent = 'Hindi and Spanish are sample translations on this clip. A real run transcribes the spoken language, and English is the only translation that runs offline.';
+      el.note.textContent = 'This clip is in English. Hindi and Spanish are sample translations - pick one to see them. A real run transcribes the spoken language; English is the only translation that runs offline.';
     }
     return;
   }
@@ -1278,8 +1278,8 @@ function wire(): void {
     for (const seg of state.segments) el.tbody.appendChild(rowFor(seg));
     rows = Array.from(el.tbody.querySelectorAll('tr'));
     drawBars(DEMO.bars);
-    applyLanguage('hi');
-    el.spoken.value = 'hi';
+    applyLanguage('en');
+    el.spoken.value = 'en';
     el.byok.hidden = true;
     el.remove.hidden = true;
     el.search.value = '';

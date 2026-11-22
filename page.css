@@ -10,6 +10,20 @@
 /* Safety net: make [hidden] win over component display rules (e.g. .btn). */
 [hidden] { display: none !important; }
 
+/* ---------- cache clear (subtle text link) ---------- */
+.cache-clear {
+  display: inline-block;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.cache-clear:hover { color: var(--color-ink); }
+
 /* ---------- shell ---------- */
 .bar {
   border-bottom: var(--rule-hair) solid var(--color-rule);

@@ -47,6 +47,12 @@
 
 **Deploy process risk:** there is no in-repo deploy configuration, no preview environment, and no rollback step documented. A bad push goes straight to production. Recommend documenting the Cloudflare project settings and adding a manual smoke step (load `/`, drop a file, confirm a transcript appears) to the release checklist.
 
+### Live transcription verification (post-deploy)
+
+The CSP fix is deployed and the live page now serves the new bundle (`index-hq3FwIRT.js`) with `'unsafe-eval'` in the meta CSP, and the `_headers` security headers are live (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy).
+
+**However, end-to-end transcription could not be verified on the live origin from this environment.** The model fetch from `huggingface.co` fails in the browser with `TypeError: Failed to fetch` / a CORS error (`No 'Access-Control-Allow-Origin' header`) when the page origin is `*.workers.dev`. The same fetch succeeds from `http://localhost` and from `curl` with the `workers.dev` Origin header, so this appears to be an environment/edge restriction (Cloudflare's edge in front of the live site or HF's browser-facing policy) rather than a code defect. **A real-browser smoke test on the live URL is required before launch** (see §11). If transcription fails for real users, the likely culprits are the `Referrer-Policy: strict-origin-when-cross-origin` header added in `_headers` or HF blocking the `workers.dev` origin; mitigations are to relax that header or to move to a custom domain / self-host the model files.
+
 ---
 
 ## 3. Browser compatibility
@@ -210,6 +216,7 @@ Reviewed via screenshots of the live site (desktop 1440×900 and mobile 390×844
 ## 9. Known limitations (unchanged from prior phases)
 
 - Whole-file decode: the entire audio is decoded into memory before transcription. Large files (> 200 MB warns) can exceed browser memory limits.
+- **Cache-Control merge:** Cloudflare's default `public, max-age=0, must-revalidate` is prepended to the `_headers` value on static assets, so the effective cache behaviour is still revalidate-every-load. Immutable caching requires a zone-level cache rule or a Workers script.
 - Cancel waits for the current 30 s inference window to finish.
 - No IndexedDB model cache (transformers.js v4.3.2 limitation); Cache API only.
 - No real analytics; no payments; no accounts.
@@ -241,8 +248,8 @@ Verification after all changes: `npm run build` clean; Vitest 17/17; Playwright 
 
 The one critical blocker (transcription broken by the CSP) is fixed in this phase. Before announcing publicly:
 
-1. **Deploy the Phase 7 commit and verify on the live URL** that a dropped file produces a transcript (the agent verified this locally on the fixed build; the live site must be re-checked after push).
-2. **Confirm the `_headers` file took effect** (check `Cache-Control` on `/assets/index-*.js` is `max-age=31536000, immutable`).
+1. **Verify transcription on the live URL in a real browser** — open the site, drop a 15 s clip, confirm a transcript appears. The agent verified the fixed build locally (WASM and WebGPU) but could not complete a live end-to-end run because `huggingface.co` model fetches are blocked for the `*.workers.dev` origin in this automated environment. If it fails for real users, see the note in §2.
+2. **Confirm the `_headers` file took effect** (check `Cache-Control` on `/assets/index-*.js` is `max-age=31536000, immutable` — note the live value is currently merged with the platform default `max-age=0`, so immutable caching is **not** yet effective; see the residual limitation below).
 3. **Run the manual device checklist (§8)** on at least one real iPhone and one Android phone — the agent could not.
 4. **Test a non-English clip** to validate the multilingual path.
 5. **Decide on the ad placeholders** (hide or fill) and the demo-clip language inconsistency.

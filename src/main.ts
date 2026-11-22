@@ -681,8 +681,12 @@ async function copyTranscript(): Promise<void> {
 }
 
 function downloadVideo(): void {
-  const url = state.objectUrl || 'demo.mp4';
-  const filename = state.file ? state.file.name : 'demo.mp4';
+  if (!state.objectUrl) {
+    window.alert('No video is loaded. Drop a video file first.');
+    return;
+  }
+  const url = state.objectUrl;
+  const filename = state.file ? state.file.name : 'clip.mp4';
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
